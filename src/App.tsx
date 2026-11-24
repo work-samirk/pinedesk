@@ -1,64 +1,138 @@
-import { useCallback, useEffect, useState } from "react";
-import { CASES, EXTENSIONS, ME, NOW, dueLabel, type CaseT, type Extension, type Status } from "./data";
-import { Agents, Approvals, Customers, Inbox, Reports, Settings, Team, type Store } from "./screens";
-import { Avatar, Icon, Mark, Toast, useMedia } from "./ui";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { CASES, EXTENSIONS, ME, NOTES, TIME_ENTRIES, customer, type CaseT, type Extension, type Note, type Status, type TimeEntry } from "./data";
+import { Customers } from "./customer";
+import { Inbox } from "./inbox";
+import { Agents, Approvals, Reports, Settings, Team } from "./manage";
+import { isOpen, type CallState, type Store } from "./store";
+import { Avatar, Icon, Toast } from "./ui";
 
 const NAV = [
-  { group: "Work", items: [["inbox", "Inbox", Icon.inbox], ["customers", "Customers", Icon.users]] },
-  { group: "Manage", items: [["approvals", "Approvals", Icon.check], ["team", "Team and deadlines", Icon.clock], ["reports", "Reports", Icon.chart], ["agents", "AI agents", Icon.bot], ["settings", "Settings", Icon.gear]] },
+  { group: "Work", items: [["inbox", "Inbox", "inbox"], ["customers", "Customers", "users"], ["approvals", "Approvals", "approve"]] },
+  { group: "Manage", items: [["team", "Team and deadlines", "clock"], ["reports", "Reports", "chart"], ["agents", "AI agents", "bot"], ["settings", "Settings", "sliders"]] },
 ] as const;
 const TITLES: Record<string, string> = { inbox: "Inbox", customers: "Customers", approvals: "Approvals", team: "Team and deadlines", reports: "Reports", agents: "AI agents", settings: "Settings" };
 
-function parse(): { screen: string; id: string | null } {
-  const [, screen, id] = window.location.hash.replace(/^#/, "").split("/");
-  return { screen: TITLES[screen] ? screen : "inbox", id: id ?? null };
+function parse(): { screen: string; id: string | null; extra: string | null } {
+  const [, screen, id, extra] = window.location.hash.replace(/^#/, "").split("/");
+  return { screen: TITLES[screen] ? screen : "inbox", id: id ?? null, extra: extra ?? null };
 }
 
 export default function App() {
-  const compact = useMedia("(max-width: 900px)");
+  const compact = useMedia900();
   const [route, setRoute] = useState(parse());
   const [cases, setCases] = useState<CaseT[]>(() => CASES.map((c) => ({ ...c, messages: [...c.messages] })));
+  const [notes, setNotes] = useState<Note[]>(NOTES);
+  const [entries, setEntries] = useState<TimeEntry[]>(TIME_ENTRIES);
   const [extensions, setExtensions] = useState<Extension[]>(EXTENSIONS);
+  const [activity, setActivity] = useState<Store["activity"]>({});
+  const [timers, setTimers] = useState<Store["timers"]>({});
+  const [linked, setLinked] = useState<Record<string, string>>({});
+  const [merged, setMerged] = useState<Record<string, string>>({});
+  const [dupDecided, setDupDecided] = useState<Store["dupDecided"]>({});
+  const [call, setCall] = useState<CallState | null>(null);
+  const [tenant, setTenantState] = useState<"default" | "landbank">("default");
   const [query, setQuery] = useState("");
   const [note, setNote] = useState<string | null>(null);
   const [more, setMore] = useState(false);
+  const clock = useRef(0);
+  const stamp = () => new Date("2026-11-23T10:42:00+08:00").getTime() + (clock.current += 60000);
 
   useEffect(() => { const f = () => setRoute(parse()); window.addEventListener("hashchange", f); return () => window.removeEventListener("hashchange", f); }, []);
-  const toast = useCallback((t: string) => { setNote(t); window.setTimeout(() => setNote(null), 2400); }, []);
-  const go = useCallback((p: string) => { window.location.hash = p; setMore(false); }, []);
+  useEffect(() => { if (tenant === "default") delete document.documentElement.dataset.tenant; else document.documentElement.dataset.tenant = tenant; }, [tenant]);
+  const toast = useCallback((t: string) => { setNote(t); window.setTimeout(() => setNote(null), 2600); }, []);
+  const go = useCallback((p: string) => { window.location.hash = p; setMore(false); window.scrollTo(0, 0); }, []);
   const patch = (id: string, f: (c: CaseT) => CaseT) => setCases((cs) => cs.map((c) => (c.id === id ? f(c) : c)));
+  const log = (key: string, text: string) => setActivity((a) => ({ ...a, [key]: [...(a[key] ?? []), { at: stamp(), text }] }));
+  const nidRef = useRef(100);
+  const nextId = () => ++nidRef.current;
 
   const store: Store = {
-    cases, extensions, query, go, toast,
+    cases, notes, entries, extensions, query, activity, timers, linked, merged, dupDecided, call, tenant, go, toast,
     send: (id, text, fromDraft) => {
-      patch(id, (c) => ({
-        ...c, draft: undefined, unread: false, status: c.status === "New" ? "Open" : c.status,
-        messages: [...c.messages, { from: "staff", who: ME.name, channel: c.channel, at: NOW + 60000, text }],
+      const c = cases.find((x) => x.id === id)!;
+      patch(id, (k) => ({
+        ...k, draft: undefined, unread: false, status: k.status === "New" ? "Open" : k.status, stage: k.stage === 5 ? 6 : k.stage, aiWorking: false,
+        messages: [...k.messages, { id: `m${nextId()}`, from: "staff", who: ME.name, channel: k.channel, at: stamp(), text, delivery: "Sent" }],
       }));
-      toast(fromDraft ? "Draft approved and sent" : "Reply sent");
+      log(id, fromDraft ? "AI draft approved and sent" : "Reply sent");
+      toast(fromDraft ? "Draft approved and sent" : `Reply sent on ${c.channel === "facebook" ? "Facebook" : "the same channel"}`);
     },
-    discard: (id) => { patch(id, (c) => ({ ...c, draft: undefined })); toast("Draft discarded"); },
-    setStatus: (id, s: Status) => patch(id, (c) => ({ ...c, status: s, unread: false })),
-    assign: (id, who) => patch(id, (c) => ({ ...c, assignee: who, unread: false })),
-    endorse: (id, unit) => { patch(id, (c) => ({ ...c, unit, status: "Waiting on unit" })); toast(`Endorsed to ${unit}`); },
+    discard: (id) => { patch(id, (c) => ({ ...c, draft: undefined })); log(id, "AI draft discarded"); toast("Draft discarded"); },
+    regenerate: (id) => { patch(id, (c) => (c.draft ? { ...c, draft: { ...c.draft, confidence: Math.min(0.97, c.draft.confidence + 0.04) } } : c)); log(id, "AI draft regenerated"); toast("New draft ready"); },
+    setStatus: (id, st: Status) => { patch(id, (c) => ({ ...c, status: st, unread: false })); log(id, `Status changed to ${st}`); },
+    assign: (id, who) => { patch(id, (c) => ({ ...c, assignee: who, unread: false })); log(id, who ? `Assigned to ${STAFFN(who)}` : "Unassigned"); },
+    endorse: (id, unit) => { patch(id, (c) => ({ ...c, unit, status: "Waiting on unit", stage: 6 })); log(id, `Endorsed to the ${unit} unit`); toast(`Endorsed to ${unit}`); },
+    resolve: (id, n, root, notified) => {
+      patch(id, (c) => ({ ...c, status: "Resolved", stage: 9, draft: undefined, resolution: { note: n, root, notified, at: stamp() } }));
+      log(id, `Resolved. Root cause: ${root}`); toast("Case resolved");
+    },
+    reopen: (id) => { patch(id, (c) => ({ ...c, status: "Open", stage: 6, resolution: undefined, handledByAI: false })); log(id, "Case reopened"); toast("Case reopened"); },
+    refreshCrm: (id) => { patch(id, (c) => ({ ...c, crmSyncMin: 0 })); log(id, "Bank data refreshed"); toast("Bank data refreshed"); },
+    decideDup: (id, join) => {
+      setDupDecided((d) => ({ ...d, [id]: join ? "joined" : "kept" }));
+      log(id, join ? "Joined to the open case on the same issue" : "Kept separate from the open case");
+      toast(join ? "Joined to the open case" : "Kept as a separate case");
+    },
+    addNote: (customerId, text, pinned, caseId) => {
+      setNotes((ns) => [...ns, { id: `n${nextId()}`, customerId, caseId, text, pinned, by: ME.id, at: stamp() }]);
+      if (caseId) log(caseId, "Private note added");
+      log(`cust:${customerId}`, `${ME.name} added a note`);
+      toast("Note saved");
+    },
+    editNote: (id, text) => { const n = notes.find((x) => x.id === id); setNotes((ns) => ns.map((x) => (x.id === id ? { ...x, text } : x))); if (n) log(`cust:${n.customerId}`, `${ME.name} edited a note`); toast("Note updated"); },
+    deleteNote: (id) => { const n = notes.find((x) => x.id === id); setNotes((ns) => ns.filter((x) => x.id !== id)); if (n) log(`cust:${n.customerId}`, `${ME.name} deleted a note`); toast("Note deleted"); },
+    pinNote: (id) => setNotes((ns) => ns.map((x) => (x.id === id ? { ...x, pinned: !x.pinned } : x))),
+    addTime: (caseId, minutes, n) => { setEntries((es) => [...es, { id: `te${nextId()}`, caseId, by: ME.id, at: stamp(), minutes, note: n }]); log(caseId, `${minutes} min logged`); toast("Time logged"); },
+    setTimer: (caseId, running) => setTimers((t) => ({ ...t, [caseId]: { seconds: t[caseId]?.seconds ?? 0, running } })),
+    tick: (caseId) => setTimers((t) => (t[caseId]?.running ? { ...t, [caseId]: { ...t[caseId], seconds: t[caseId].seconds + 1 } } : t)),
+    startCall: (caseId) => { if (call) { toast("Finish the current call first"); return; } setCall({ caseId, phase: "dialing", seconds: 0 }); },
+    advanceCall: (phase, seconds) => setCall((c) => (c ? { ...c, phase, seconds: seconds ?? c.seconds } : c)),
+    logCustomer: (customerId, text) => log(`cust:${customerId}`, text),
+    finishCall: (outcome, n) => {
+      if (!call) return;
+      const c = cases.find((x) => x.id === call.caseId)!;
+      const cu = customer(c.customerId);
+      const secs = outcome === "Reached" ? Math.max(call.seconds, 20) : Math.min(call.seconds, 25);
+      const transcript = outcome === "Reached" ? [
+        { who: "Executive" as const, t: "0:04", text: `Good day ${cu.name.split(" ")[0]}, this is Ana from Land Bank. This call is recorded. Is this a good time?` },
+        { who: "Customer" as const, t: "0:11", text: "Yes, go ahead." },
+        { who: "Executive" as const, t: "0:18", text: n || "I am calling about your open case and what we found so far." },
+      ] : [];
+      patch(c.id, (k) => ({
+        ...k, callbackAt: outcome === "Call back later" ? "16:00" : k.callbackAt, status: k.status === "New" ? "Open" : k.status,
+        messages: [...k.messages, { id: `m${nextId()}`, from: "staff", who: ME.name, channel: "voice", at: stamp(), text: `Outbound call to ${cu.name}`,
+          call: { duration: secs, outcome, recorded: true, transcript, summary: n || (outcome === "Reached" ? "Spoke with the customer about the open case." : `${outcome}. No voicemail left.`) } }],
+      }));
+      setEntries((es) => [...es, { id: `te${nextId()}`, caseId: c.id, by: ME.id, at: stamp(), minutes: Math.max(1, Math.round(secs / 60)), note: "Call" }]);
+      log(c.id, `Outbound call, ${outcome.toLowerCase()}, recorded`);
+      setCall(null); toast("Call saved to the case and the customer history");
+    },
+    cancelCall: () => setCall(null),
+    linkContact: (fromId, toId) => {
+      setCases((cs) => cs.map((c) => (c.customerId === fromId ? { ...c, customerId: toId } : c)));
+      setLinked((l) => ({ ...l, [fromId]: toId }));
+      log(`cust:${toId}`, `${ME.name} linked ${customer(fromId).name} to this profile`);
+      toast(`Linked to ${customer(toId).name}. History merged.`); go(`/customers/${toId}`);
+    },
+    mergeProfile: (keepId, dupId) => { setMerged((m) => ({ ...m, [dupId]: keepId })); log(`cust:${keepId}`, `${ME.name} merged a duplicate profile`); toast("Profiles merged"); },
     decide: (id, ok) => {
       const x = extensions.find((e) => e.id === id)!;
       if (ok) patch(x.caseId, (c) => ({ ...c, due: x.newDue }));
       setExtensions((xs) => xs.filter((e) => e.id !== id));
       toast(ok ? "Extension approved" : "Extension rejected");
     },
+    setTenant: (t) => setTenantState(t),
   };
 
-  const open = cases.filter((c) => c.status !== "Resolved");
+  const open = cases.filter(isOpen);
   const counts: Record<string, number> = {
     inbox: open.filter((c) => c.assignee === "ana").length,
     approvals: open.filter((c) => c.draft).length + extensions.length,
   };
-  void dueLabel;
 
   const body = (() => {
     switch (route.screen) {
-      case "customers": return <Customers s={store} selected={route.id} />;
+      case "customers": return <Customers s={store} selected={route.id} from={route.extra} />;
       case "approvals": return <Approvals s={store} />;
       case "team": return <Team s={store} />;
       case "reports": return <Reports />;
@@ -68,59 +142,138 @@ export default function App() {
     }
   })();
 
-  const search = (
-    <div className="search">
-      {Icon.search({})}
-      <input aria-label="Search cases and customers" placeholder="Search cases and customers" value={query}
-        onChange={(e) => { setQuery(e.target.value); if (route.screen !== "inbox") go("/inbox"); }} />
-      <kbd>/</kbd>
-    </div>
-  );
-
   return (
     <div className="app">
-      <aside className="side">
-        <div className="brand"><Mark /><div><b>PineDesk</b><span>Land Bank</span></div></div>
-        <nav className="nav" aria-label="Main">
+      <aside className="side" aria-label="Sidebar">
+        <div className="brand"><div className="mark" aria-hidden="true">P</div><div><b>PineDesk</b><span>Land Bank</span></div></div>
+        <nav aria-label="Main">
           {NAV.map((g) => (
-            <div key={g.group} style={{ display: "contents" }}>
-              <h6>{g.group}</h6>
-              {g.items.map(([k, label, ic]) => (
-                <button key={k} aria-current={route.screen === k ? "page" : undefined} onClick={() => go(`/${k}`)}>
-                  {ic({})}<span>{label}</span>{counts[k] ? <span className="count">{counts[k]}</span> : null}
-                </button>
-              ))}
+            <div key={g.group}>
+              <div className="grp">{g.group}</div>
+              <div className="nav">
+                {g.items.map(([k, label, ic]) => (
+                  <button key={k} aria-current={route.screen === k ? "page" : undefined} onClick={() => go(`/${k}`)}>
+                    <Icon n={ic} s={18} />{label}{counts[k] ? <span className="n">{counts[k]}</span> : null}
+                  </button>
+                ))}
+              </div>
             </div>
           ))}
         </nav>
-        <div className="side-foot"><Avatar name={ME.name} /><div className="who">{ME.name}<span>{ME.role}</span></div></div>
+        <div className="me"><Avatar name={ME.name} size={32} /><div><b>{ME.name}</b><span className="st"><i className="dot" />Available</span></div></div>
       </aside>
-      <header className="top">{search}<span className="proto-tag">Prototype · sample data</span></header>
 
-      <header className="mtop"><Mark size={24} /><div className="mtitle">{TITLES[route.screen]}</div><span className="proto-tag">Sample data</span></header>
-      <main className="sheet">{body}</main>
+      <header className="mtop"><div className="mark" aria-hidden="true">P</div><div className="mtitle">{TITLES[route.screen]}</div><button className="icb" aria-label="Notifications"><Icon n="bell" s={18} /></button></header>
+
+      <div className="main">
+        <header className="top">
+          <div className="ttl">{TITLES[route.screen]}</div>
+          <label className="search"><Icon n="search" s={16} />
+            <input type="search" aria-label="Search cases and customers" placeholder="Search cases, customers and IDs" value={query}
+              onChange={(e) => { setQuery(e.target.value); if (route.screen !== "inbox") go("/inbox"); }} />
+            <kbd>Ctrl K</kbd></label>
+          <div className="right">
+            <span className="proto">Prototype, sample data</span>
+            <span className="avail"><i className="dot" />Available</span>
+            <button className="btn p" onClick={() => toast("Creating a case is not part of the prototype")}><Icon n="plus" s={16} />New case</button>
+            <button className="icb" aria-label="Notifications"><Icon n="bell" s={18} /><i className="pip" /></button>
+            <button className="icb" aria-label="Help"><Icon n="help" s={18} /></button>
+          </div>
+        </header>
+        {body}
+      </div>
+
       {compact && (
         <>
           <nav className="mtabs" aria-label="Main">
-            {([["inbox", "Inbox", Icon.inbox], ["approvals", "Approvals", Icon.check], ["team", "Team", Icon.clock], ["customers", "Customers", Icon.users]] as const).map(([k, l, ic]) => (
+            {([["inbox", "Inbox", "inbox"], ["approvals", "Approvals", "approve"], ["team", "Team", "clock"], ["customers", "Customers", "users"]] as const).map(([k, l, ic]) => (
               <button key={k} aria-current={route.screen === k ? "page" : undefined} onClick={() => go(`/${k}`)}>
-                {ic({ size: 20 })}<span>{l}</span>{counts[k] ? <span className="badge">{counts[k]}</span> : null}
+                <Icon n={ic} s={20} /><span>{l}</span>{counts[k] ? <span className="badge">{counts[k]}</span> : null}
               </button>
             ))}
-            <button aria-current={["reports", "agents", "settings"].includes(route.screen) ? "page" : undefined} onClick={() => setMore(true)}>{Icon.more({ size: 20 })}<span>More</span></button>
+            <button aria-current={["reports", "agents", "settings"].includes(route.screen) ? "page" : undefined} onClick={() => setMore(true)}><Icon n="more" s={20} /><span>More</span></button>
           </nav>
           {more && (
             <div className="sheet-more" onClick={() => setMore(false)}>
               <div onClick={(e) => e.stopPropagation()} role="dialog" aria-label="More">
-                {([["reports", "Reports", Icon.chart], ["agents", "AI agents", Icon.bot], ["settings", "Settings", Icon.gear]] as const).map(([k, l, ic]) => (
-                  <button key={k} onClick={() => go(`/${k}`)}>{ic({ size: 20 })}{l}</button>
+                {([["reports", "Reports", "chart"], ["agents", "AI agents", "bot"], ["settings", "Settings", "sliders"]] as const).map(([k, l, ic]) => (
+                  <button key={k} onClick={() => go(`/${k}`)}><Icon n={ic} s={20} />{l}</button>
                 ))}
               </div>
             </div>
           )}
         </>
       )}
+      <CallPanel s={store} />
       <Toast text={note} />
+    </div>
+  );
+}
+
+function useMedia900() {
+  const [m, setM] = useState(() => window.matchMedia("(max-width: 900px)").matches);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 900px)");
+    const f = () => setM(mq.matches);
+    mq.addEventListener("change", f);
+    return () => mq.removeEventListener("change", f);
+  }, []);
+  return m;
+}
+const STAFFN = (id: string) => ({ ana: "Ana Villanueva", carlo: "Carlo Mendoza", liza: "Liza Ramos", paolo: "Paolo Cruz", nina: "Nina Salonga" } as Record<string, string>)[id] ?? id;
+
+// ---------------------------------------------------------------- call panel (simulated, Exotel assumed)
+function CallPanel({ s }: { s: Store }) {
+  const call = s.call;
+  const [sec, setSec] = useState(0);
+  const [outcome, setOutcome] = useState<"Reached" | "No answer" | "Call back later" | "Wrong number">("Reached");
+  const [n, setN] = useState("");
+  const [muted, setMuted] = useState(false);
+  const [hold, setHold] = useState(false);
+  const adv = useRef(s.advanceCall);
+  adv.current = s.advanceCall;
+  const phase = call?.phase;
+  useEffect(() => {
+    if (phase === "dialing") { const h = window.setTimeout(() => adv.current("live"), 1800); return () => window.clearTimeout(h); }
+    if (phase === "live") { setSec(0); const h = window.setInterval(() => setSec((x) => x + 1), 1000); return () => window.clearInterval(h); }
+  }, [phase]);
+  useEffect(() => { if (phase === "dialing") { setN(""); setOutcome("Reached"); setMuted(false); setHold(false); } }, [phase]);
+  if (!call) return null;
+  const c = s.cases.find((x) => x.id === call.caseId)!;
+  const cu = customer(c.customerId);
+  const clock = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+  return (
+    <div className="callp" role="dialog" aria-label="Call">
+      <header>
+        <Avatar name={cu.name} size={40} />
+        <div className="grow"><b>{cu.name}</b><span className="s">{phase === "dialing" ? "Calling through Exotel" : phase === "live" ? "Connected" : "Call ended"}</span></div>
+        <button className="icb" style={{ color: "#fff" }} aria-label="Close" onClick={() => (phase === "live" ? null : s.cancelCall())} disabled={phase === "live"}><Icon n="x" s={16} /></button>
+      </header>
+      <div className="cb">
+        {phase === "dialing" && <>
+          <div className="big">{cu.mobile}</div>
+          <div className="muted" style={{ textAlign: "center" }}>Number on file in the bank's CRM. Case {c.id}.</div>
+          {!c.verified && <div className="bannr warn" style={{ margin: 0 }}><Icon n="alert" s={16} />Customer not verified yet. Verify before you discuss account details.</div>}
+          <div className="ctl"><button className="btn end" onClick={s.cancelCall}><Icon n="phoneOff" s={16} />Cancel</button></div>
+        </>}
+        {phase === "live" && <>
+          <div className="big">{clock}</div>
+          <div className="rec"><i />Recording. The customer heard a recording notice.</div>
+          <textarea className="textarea" aria-label="Call notes" placeholder="Notes during the call" value={n} onChange={(e) => setN(e.target.value)} />
+          <div className="ctl">
+            <button className="btn sm" aria-pressed={muted} onClick={() => setMuted(!muted)}><Icon n="mic" s={16} />{muted ? "Unmute" : "Mute"}</button>
+            <button className="btn sm" aria-pressed={hold} onClick={() => setHold(!hold)}><Icon n="pause" s={16} />{hold ? "Resume" : "Hold"}</button>
+            <button className="btn sm end" onClick={() => s.advanceCall("wrap", sec)}><Icon n="phoneOff" s={16} />End call</button>
+          </div>
+        </>}
+        {phase === "wrap" && <>
+          <div className="field" style={{ marginBottom: 0 }}><label htmlFor="oc">Outcome</label>
+            <select id="oc" className="select" value={outcome} onChange={(e) => setOutcome(e.target.value as typeof outcome)}>{["Reached", "No answer", "Call back later", "Wrong number"].map((o) => <option key={o}>{o}</option>)}</select></div>
+          <div className="field" style={{ marginBottom: 0 }}><label htmlFor="cn">Note for the case</label><textarea id="cn" className="textarea" value={n} onChange={(e) => setN(e.target.value)} placeholder="What was said and agreed" /></div>
+          <div className="muted" style={{ fontSize: 12.5 }}>The recording, transcript and {Math.max(1, Math.round(call.seconds / 60))} min of time are saved to the case and the customer history.</div>
+          <button className="btn p" onClick={() => s.finishCall(outcome, n.trim())}><Icon n="check" s={16} />Save to the case</button>
+        </>}
+      </div>
     </div>
   );
 }
