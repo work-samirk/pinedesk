@@ -5,13 +5,18 @@ import {
 } from "./data";
 import { Due, PriorityPill, StatusPill, CallBox } from "./parts";
 import { isOpen, type Store } from "./store";
+import { Sheet } from "./sheet";
 import { Avatar, Chan, Empty, Icon, MenuItem, Pill, Popover, useMedia } from "./ui";
 
 // ---------------------------------------------------------------- views
 const VIEWS = ["Mine", "Unassigned", "At risk", "Needs my approval", "Waiting on customer", "Waiting on unit", "Repeat contacts", "Fraud and distress", "All open", "Resolved", "Handled by AI"] as const;
 type View = (typeof VIEWS)[number];
-const QUICK: View[] = ["Mine", "Unassigned", "At risk", "All open"];
-const UNITS = ["Cards", "Loans", "Deposits", "Digital Banking", "Remittance", "Customer care"];
+const QUICK: View[] = ["Mine", "Unassigned", "All open"];
+const MORE_VIEWS: View[] = ["At risk", "Needs my approval", "Fraud and distress", "Waiting on customer", "Waiting on unit", "Repeat contacts", "Resolved", "Handled by AI"];
+const UNITS = ["Cards", "Loans", "Deposits", "Digital Banking", "Fraud", "Customer care"];
+const LINK_VIEW: Record<string, View> = { "~approve": "Needs my approval", "~risk": "At risk", "~mine": "Mine", "~unassigned": "Unassigned" };
+const bucket = (c: CaseT) => (c.status === "Resolved" ? "Closed" : dueLabel(c.due).tone === "breach" ? "Overdue" : dueLabel(c.due).tone === "risk" ? "Due in the next 4 hours" : "Later");
+const BUCKETS = ["Overdue", "Due in the next 4 hours", "Later", "Closed"];
 const inView = (c: CaseT, v: View): boolean => {
   switch (v) {
     case "Mine": return isOpen(c) && c.assignee === "ana";
@@ -32,7 +37,10 @@ const PRI = { urgent: 0, high: 1, normal: 2 };
 export function Inbox({ s, selected }: { s: Store; selected: string | null }) {
   const single = useMedia("(max-width: 900px)");
   const wide = useMedia("(min-width: 1301px)");
-  const [view, setView] = useState<View>("Mine");
+  const link = selected?.startsWith("~") ? selected : null;
+  const [view, setView] = useState<View>(link && LINK_VIEW[link] ? LINK_VIEW[link] : "Mine");
+  useEffect(() => { if (link && LINK_VIEW[link]) setView(LINK_VIEW[link]); }, [link]);
+  if (link) selected = null;
   const [chs, setChs] = useState<string[]>([]);
   const [sort, setSort] = useState<"due" | "new" | "priority">("due");
   const [prio, setPrio] = useState<"any" | "urgent" | "high">("any");
@@ -54,79 +62,69 @@ export function Inbox({ s, selected }: { s: Store; selected: string | null }) {
   const idx = active ? rows.findIndex((r) => r.id === active.id) : -1;
   const prevId = idx > 0 ? rows[idx - 1].id : null;
   const nextId = idx >= 0 && idx < rows.length - 1 ? rows[idx + 1].id : null;
-  const filtered = prio !== "any" || unit !== "any";
 
+  const nFilters = chs.length + (prio !== "any" ? 1 : 0) + (unit !== "any" ? 1 : 0) + (MORE_VIEWS.includes(view) ? 1 : 0);
   const list = (
     <section className="panel" aria-label="Cases">
       <div className="lh">
         <div className="t">
-          <Popover width={250} button={({ toggle, ref }) => (
-            <button ref={ref} className="viewbtn" onClick={toggle} aria-haspopup="menu"><h1>{view === "Mine" ? "My open cases" : view}</h1><Icon n="down" s={16} /></button>
-          )}>
-            {(close) => <>{VIEWS.map((v) => (
-              <MenuItem key={v} active={v === view} onClick={() => { setView(v); close(); }}>{v}<span className="muted" style={{ marginLeft: 8, flex: "none" }}>{s.cases.filter((c) => inView(c, v)).length}</span></MenuItem>
-            ))}</>}
-          </Popover>
+          <h1>{QUICK.includes(view) ? "Cases" : view}</h1>
           <span className="cnt">{rows.length}</span>
           <div className="sp">
-            <Popover width={240} align="end" button={({ toggle, ref }) => (
-              <button ref={ref} className="icb" aria-label="Filter cases" aria-pressed={filtered} onClick={toggle}><Icon n="filter" s={16} /></button>
+            <Popover width={290} align="end" button={({ toggle, ref }) => (
+              <button ref={ref} className="btn sm" aria-label={`Filters${nFilters ? `, ${nFilters} on` : ""}`} aria-pressed={nFilters > 0} onClick={toggle}><Icon n="filter" s={14} />Filter{nFilters > 0 && <span className="nb">{nFilters}</span>}</button>
             )}>
-              {(close) => <>
-                <h5>Priority</h5>
-                {(["any", "urgent", "high"] as const).map((p) => <MenuItem key={p} active={prio === p} onClick={() => { setPrio(p); close(); }}>{p === "any" ? "Any priority" : p === "urgent" ? "Urgent" : "High"}</MenuItem>)}
-                <h5>Unit</h5>
-                {["any", ...UNITS].map((u) => <MenuItem key={u} active={unit === u} onClick={() => { setUnit(u); close(); }}>{u === "any" ? "Any unit" : u}</MenuItem>)}
-              </>}
-            </Popover>
-            <Popover width={200} align="end" button={({ toggle, ref }) => (
-              <button ref={ref} className="icb" aria-label="Sort cases" onClick={toggle}><Icon n="sort" s={16} /></button>
-            )}>
-              {(close) => <>{([["due", "Due soonest"], ["new", "Newest"], ["priority", "Priority"]] as const).map(([k, l]) => <MenuItem key={k} active={sort === k} onClick={() => { setSort(k); close(); }}>{l}</MenuItem>)}</>}
+              {(close) => <div className="fpop">
+                <h5>Show</h5>
+                <div className="chips">{MORE_VIEWS.map((v) => <button key={v} className="chip-f" aria-pressed={view === v} onClick={() => setView(view === v ? "All open" : v)}>{v}<span>{s.cases.filter((c) => inView(c, v)).length}</span></button>)}</div>
+                <h5>Channel</h5>
+                <div className="chips">{CHANNEL_GROUPS.map((g) => { const on = chs.includes(g.key); return <button key={g.key} className="chip-f" aria-pressed={on} onClick={() => setChs(on ? chs.filter((k) => k !== g.key) : [...chs, g.key])}><Chan c={g.channels[0]} s={16} />{g.label}</button>; })}</div>
+                <div className="row2">
+                  <label className="field"><span className="flabel">Priority</span><select className="select" value={prio} onChange={(e) => setPrio(e.target.value as typeof prio)}><option value="any">Any</option><option value="urgent">Urgent</option><option value="high">High</option></select></label>
+                  <label className="field"><span className="flabel">Unit</span><select className="select" value={unit} onChange={(e) => setUnit(e.target.value)}><option value="any">Any</option>{UNITS.map((u) => <option key={u}>{u}</option>)}</select></label>
+                </div>
+                <label className="field"><span className="flabel">Sort</span><select className="select" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)}><option value="due">Due soonest</option><option value="new">Newest</option><option value="priority">Priority</option></select></label>
+                <div className="acts"><button className="btn g sm" onClick={() => { setChs([]); setPrio("any"); setUnit("any"); setView("Mine"); }}>Clear all</button><span className="sp" /><button className="btn p sm" onClick={close}>Done</button></div>
+              </div>}
             </Popover>
           </div>
         </div>
-        <div className="tabs" role="tablist" aria-label="Views">
+        <div className="seg-ctl full" role="group" aria-label="Queues">
           {QUICK.map((v) => (
-            <button key={v} role="tab" aria-selected={view === v} onClick={() => setView(v)}>{v}<span className="n">{s.cases.filter((c) => inView(c, v)).length}</span></button>
+            <button key={v} aria-pressed={view === v} onClick={() => setView(v)}>{v === "Mine" ? "Mine" : v === "Unassigned" ? "Unassigned" : "All open"}<span className="n">{s.cases.filter((c) => inView(c, v)).length}</span></button>
           ))}
         </div>
-      </div>
-      <div className="chs" aria-label="Channels">
-                {CHANNEL_GROUPS.map((g) => {
-          const n = inViewRows.filter((c) => g.channels.includes(c.channel)).length;
-          const on = chs.includes(g.key);
-          return (
-            <button key={g.key} className="chip-f" aria-pressed={on} aria-label={`${g.label}, ${n} cases`} title={g.label}
-              onClick={() => setChs(on ? chs.filter((k) => k !== g.key) : [...chs, g.key])}>
-              <Chan c={g.channels[0]} s={16} />{n}
-            </button>
-          );
-        })}
-        {chs.length > 0 && <button className="link" style={{ fontSize: 12.5, marginLeft: 4 }} onClick={() => setChs([])}>Clear</button>}
+        {nFilters > 0 && <div className="active-f">{MORE_VIEWS.includes(view) && <button className="chip-x" onClick={() => setView("All open")}>{view}<Icon n="x" s={12} /></button>}
+          {chs.map((k) => <button key={k} className="chip-x" onClick={() => setChs(chs.filter((x) => x !== k))}>{CHANNEL_GROUPS.find((g) => g.key === k)!.label}<Icon n="x" s={12} /></button>)}
+          {prio !== "any" && <button className="chip-x" onClick={() => setPrio("any")}>{prio === "urgent" ? "Urgent" : "High"}<Icon n="x" s={12} /></button>}
+          {unit !== "any" && <button className="chip-x" onClick={() => setUnit("any")}>{unit}<Icon n="x" s={12} /></button>}</div>}
       </div>
       <div className="rows">
         {rows.length === 0 && <Empty title="Nothing here">No cases match this view and these filters.</Empty>}
-        {rows.map((c) => {
-          const cu = customer(c.customerId);
-          const turn = turnOf(c);
+        {BUCKETS.map((bk) => {
+          const group = rows.filter((c) => bucket(c) === bk);
+          if (!group.length) return null;
           return (
-            <button key={c.id} className="row" aria-selected={active?.id === c.id} onClick={() => s.go(`/inbox/${c.id}`)}>
-              <span className="avw"><Avatar name={cu.name} size={40} /><Chan c={c.channel} s={18} ring /></span>
-              <span>
-                <span className="l1">
-                  {c.unread && <i className="u" aria-label="Unread" />}<b>{cu.name}</b>
-                  {c.priority !== "normal" && c.status !== "Resolved" && <Icon n="flag" s={14} className={`flag ${c.priority === "urgent" ? "neg" : "warn"}`} />}
-                  <time>{ago(c.opened)}</time>
-                </span>
-                <span className="sj">{c.subject}</span>
-                <span className="l3"><Pill tone={turn.tone} icon={turn.tone === "pri" || turn.tone === "ai" ? "spark" : turn.tone === "warn" && c.callbackAt ? "phone" : undefined}>{turn.label}</Pill><Due c={c} /></span>
-              </span>
-            </button>
+            <Fragment key={bk}>
+              <div className={`bucket ${bk === "Overdue" ? "neg" : bk.startsWith("Due") ? "warn" : ""}`}>{bk}<span>{group.length}</span></div>
+              {group.map((c) => {
+                const cu = customer(c.customerId);
+                const turn = turnOf(c);
+                return (
+                  <button key={c.id} className="row" aria-current={active?.id === c.id ? "true" : undefined} onClick={() => s.go(`/inbox/${c.id}`)}>
+                    <span className="avw"><Avatar name={cu.name} size={38} /><Chan c={c.channel} s={18} ring /></span>
+                    <span className="rb">
+                      <span className="l1">{c.unread && <i className="u" aria-label="Unread" />}<b>{cu.name}</b>{c.fraud && c.status !== "Resolved" && <Icon n="shield" s={14} className="flag neg" />}<time>{ago(c.opened)}</time></span>
+                      <span className="sj">{c.subject}</span>
+                      <span className="l3"><span className={`turn ${turn.tone}`}>{turn.tone === "pri" || turn.tone === "ai" ? <Icon n="spark" s={12} /> : null}{turn.label}</span><Due c={c} /></span>
+                    </span>
+                  </button>
+                );
+              })}
+            </Fragment>
           );
         })}
       </div>
-      <div className="lf"><span>{rows.length} of {inViewRows.length} cases</span><span>{sort === "due" ? "Due soonest" : sort === "new" ? "Newest first" : "By priority"}</span></div>
     </section>
   );
 
@@ -159,11 +157,14 @@ export function CustomerRail({ s, c }: { s: Store; c: CaseT }) {
       <div className="sec">
         <div className="who"><Avatar name={cu.name} size={48} /><div><b>{cu.name}</b><span className="sub">{cu.matched ? `${cu.segment} customer since ${cu.since}` : "Not a customer on file"}</span></div></div>
         <div className="tags">
-          {cu.matched && cu.kyc && <Pill tone={cu.kyc.status === "Verified" ? "pos" : "warn"} icon="shield">KYC {cu.kyc.status.toLowerCase()}</Pill>}
-          {cu.matched && c.verified && <Pill tone="pos">Verified in this {c.channel === "voice" ? "call" : "contact"}</Pill>}
-          {!cu.matched && <Pill tone="warn">Not matched</Pill>}
+          {cu.matched ? <Pill tone="pos" icon="check">In the bank's records</Pill> : <Pill tone="warn">Not in the bank's records yet</Pill>}
         </div>
         {cu.alerts.map((a) => <div key={a} className={`alert ${a.startsWith("Fraud") ? "" : "warn"}`}><Icon n="alert" s={16} /><span>{a}</span></div>)}
+      </div>
+      <div className="sec idcheck">
+        <h3>Identity check</h3>
+        {c.verified ? <p className="ok"><Icon n="shield" s={16} /><span><b>Checked in this {c.channel === "voice" ? "call" : "contact"}</b>{c.verified}</span></p>
+          : <p className="warn"><Icon n="alert" s={16} /><span><b>Not checked yet</b>{cu.matched ? "Check identity before you discuss the account." : "Invite to a private message and match the customer first."}</span></p>}
       </div>
       <div className="sec">
         <h3>Details<button className="link" onClick={goProfile}>View profile</button></h3>
@@ -207,7 +208,7 @@ const TEMPLATES = [
   { name: "Ask for a valid ID", text: "To protect your account, please send a clear photo of a valid ID. Never share your PIN or one-time password with anyone." },
   { name: "Close the conversation", text: "We are glad we could help. If you need anything else, reply here and we will be happy to assist." },
 ];
-const TABS = ["Conversation", "Pipeline", "Resolution", "Time", "Attachments", "Activity", "Approvals", "Linked"] as const;
+const TABS = ["Conversation", "How the AI handled it", "Activity and time", "Files and links"] as const;
 type Tab = (typeof TABS)[number];
 const STATUSES: Status[] = ["New", "Open", "Waiting on customer", "Waiting on unit", "Resolved"];
 const ROOTS = ["Customer query", "Fraud", "Branch process", "System issue", "Data error", "Other"];
@@ -223,8 +224,10 @@ function CaseView({ s, c, single, onBack, prevId, nextId, onCustomer, drawer, cl
   const [text, setText] = useState<string | null>(null);
   const [noteText, setNoteText] = useState("");
   const [seen, setSeen] = useState(c.id);
+  const [resolving, setResolving] = useState(false);
+  const [why, setWhy] = useState(false);
   const bodyRef = useRef<HTMLDivElement | null>(null);
-  if (seen !== c.id) { setSeen(c.id); setText(null); setNoteText(""); setTab("Conversation"); setMode("reply"); }
+  if (seen !== c.id) { setSeen(c.id); setText(null); setNoteText(""); setTab("Conversation"); setMode("reply"); setWhy(false); }
 
   // ticket timer: starts when the owner opens the case, pauses when they leave
   const timer = s.timers[c.id] ?? { running: false, seconds: 0 };
@@ -283,47 +286,44 @@ function CaseView({ s, c, single, onBack, prevId, nextId, onCustomer, drawer, cl
     <div className="case">
       <div className="ch-head">
         <div className="crumb">
-          {single && <button className="icb" aria-label="Back to inbox" onClick={onBack} style={{ marginLeft: -8 }}><Icon n="left" s={18} /></button>}
-          <span className="mono">{c.id}</span>
+          {single && <button className="icb" aria-label="Back to cases" onClick={onBack} style={{ marginLeft: -8 }}><Icon n="left" s={18} /></button>}
+          <span className="mono">{c.id}</span><span className="dotsep" /><Chan c={c.channel} s={16} /><span>{CHANNEL_LABEL[c.channel]}</span><span className="dotsep" /><span>Opened {agoLong(c.opened)}</span>
           <span className="sp">
-            <Popover width={230} align="end" button={({ toggle, ref }) => (
-              <button ref={ref} className="menu" onClick={toggle} aria-label="Assignee">{c.assignee ? <Avatar name={staffName(c.assignee)} size={22} /> : <Icon n="user" s={16} />}{c.assignee ? firstName(staffName(c.assignee)) : "Unassigned"}<Icon n="down" s={14} /></button>
-            )}>
-              {(close) => <><MenuItem active={!c.assignee} onClick={() => { s.assign(c.id, null); close(); }}>Unassigned</MenuItem>
-                {STAFF.map((p) => <MenuItem key={p.id} active={c.assignee === p.id} onClick={() => { s.assign(c.id, p.id); close(); }}>{p.name}</MenuItem>)}</>}
-            </Popover>
-            <button className="timer" aria-label={timer.running ? "Pause the ticket timer" : "Start the ticket timer"} onClick={() => s.setTimer(c.id, !timer.running)}>
-              <Icon n={timer.running ? "pause" : "play"} s={14} />{clock}
-            </button>
-            <button className="icb" aria-label="Previous case" disabled={!prevId} onClick={() => prevId && s.go(`/inbox/${prevId}`)}><Icon n="left" s={16} /></button>
-            <button className="icb" aria-label="Next case" disabled={!nextId} onClick={() => nextId && s.go(`/inbox/${nextId}`)}><Icon n="right" s={16} /></button>
-            <Popover width={230} align="end" button={({ toggle, ref }) => <button ref={ref} className="icb" aria-label="More actions" onClick={toggle}><Icon n="more" s={16} /></button>}>
-              {(close) => <>
-                {c.status === "Resolved" ? <MenuItem icon="refresh" onClick={() => { s.reopen(c.id); close(); }}>Reopen case</MenuItem> : null}
-                {["Request an extension", "Link to another case", "Merge with a duplicate", "Split into two cases", "Change customer"].map((l) => <MenuItem key={l} onClick={() => { s.toast(`${l}: not part of the prototype`); close(); }}>{l}</MenuItem>)}
-              </>}
-            </Popover>
+            <button className="icb" aria-label="Previous case" disabled={!prevId} onClick={() => prevId && s.go(`/inbox/${prevId}`)}><Icon n="up" s={16} /></button>
+            <button className="icb" aria-label="Next case" disabled={!nextId} onClick={() => nextId && s.go(`/inbox/${nextId}`)}><Icon n="down" s={16} /></button>
           </span>
         </div>
         {single ? <h1>{c.subject}</h1> : <h2>{c.subject}</h2>}
         <div className="meta">
-          <Popover width={220} button={({ toggle, ref }) => <button ref={ref} style={{ background: "none", border: 0, padding: 0 }} onClick={toggle} aria-label="Change status"><StatusPill status={c.status} /></button>}>
+          <Popover width={220} button={({ toggle, ref }) => <button ref={ref} className="pillbtn" onClick={toggle} aria-label={`Status: ${c.status}. Change status`}><StatusPill status={c.status} /><Icon n="down" s={12} /></button>}>
             {(close) => <>{STATUSES.map((x) => <MenuItem key={x} active={c.status === x} onClick={() => { s.setStatus(c.id, x); close(); }}>{x}</MenuItem>)}</>}
           </Popover>
           <PriorityPill p={c.priority} />
-          <span className="sep" /><Chan c={c.channel} s={18} /><span>{CHANNEL_LABEL[c.channel]}</span>
+          {c.fraud && <Pill tone="neg" icon="shield">Fraud lane</Pill>}
           <span className="sep" />
           <button className="link" onClick={() => s.go(`/customers/${cu.id}/${c.id}`)}>{cu.name}</button>
-          {!wide && <button className="btn g sm only-narrow" onClick={onCustomer}><Icon n="user" s={14} />Customer details</button>}
-        </div>
-        <div className="tool">
-          <button className="btn sm" onClick={() => focusComposer("reply")}><Icon n="reply" s={16} />Reply</button>
-          <button className="btn sm" onClick={() => focusComposer("note")}><Icon n="note" s={16} />Note</button>
-          <button className="btn sm" onClick={() => s.startCall(c.id)} disabled={!cu.matched}><Icon n="phone" s={16} />Call</button>
-          <Popover width={220} button={({ toggle, ref }) => <button ref={ref} className="btn sm" onClick={toggle}>Endorse<Icon n="down" s={14} /></button>}>
-            {(close) => <>{UNITS.filter((u) => u !== c.unit).map((u) => <MenuItem key={u} onClick={() => { s.endorse(c.id, u); close(); }}>{u}</MenuItem>)}</>}
-          </Popover>
-          <button className="btn sm" onClick={() => setTab("Resolution")}><Icon n="check" s={16} />Resolve</button>
+          {!wide && <button className="btn g sm only-narrow" onClick={onCustomer}><Icon n="user" s={14} />Details</button>}
+          <span className="acts-r">
+            <Popover width={230} align="end" button={({ toggle, ref }) => (
+              <button ref={ref} className="btn sm" onClick={toggle} aria-label="Owner">{c.assignee ? <Avatar name={staffName(c.assignee)} size={20} /> : <Icon n="user" s={14} />}{c.assignee ? firstName(staffName(c.assignee)) : "Assign"}<Icon n="down" s={12} /></button>
+            )}>
+              {(close) => <><MenuItem active={!c.assignee} onClick={() => { s.assign(c.id, null); close(); }}>Unassigned</MenuItem>
+                {STAFF.map((p) => <MenuItem key={p.id} active={c.assignee === p.id} onClick={() => { s.assign(c.id, p.id); close(); }}>{p.name}</MenuItem>)}</>}
+            </Popover>
+            <Popover width={250} align="end" button={({ toggle, ref }) => <button ref={ref} className="btn sm" aria-label="More actions: call, note, endorse" onClick={toggle}><Icon n="more" s={16} />Actions</button>}>
+              {(close) => <>
+                <MenuItem icon="phone" onClick={() => { if (cu.matched) s.startCall(c.id); else s.toast("No number on file for this contact"); close(); }}>Call the customer</MenuItem>
+                <MenuItem icon="note" onClick={() => { focusComposer("note"); close(); }}>Add a private note</MenuItem>
+                <h5>Endorse to a unit</h5>
+                {UNITS.filter((u) => u !== c.unit).map((u) => <MenuItem key={u} icon="right" onClick={() => { s.endorse(c.id, u); close(); }}>{u}</MenuItem>)}
+                <h5>More</h5>
+                <MenuItem icon="clock" onClick={() => { setTab("Activity and time"); close(); }}>Log time</MenuItem>
+                {c.status === "Resolved" ? <MenuItem icon="refresh" onClick={() => { s.reopen(c.id); close(); }}>Reopen case</MenuItem> : null}
+                {["Request more time", "Link to another case", "Merge with a duplicate"].map((l) => <MenuItem key={l} onClick={() => { s.toast(`${l}: not part of the prototype`); close(); }}>{l}</MenuItem>)}
+              </>}
+            </Popover>
+            {c.status !== "Resolved" && <button className="btn sm ok" onClick={() => setResolving(true)}><Icon n="check" s={14} />Resolve</button>}
+          </span>
         </div>
       </div>
 
@@ -341,18 +341,16 @@ function CaseView({ s, c, single, onBack, prevId, nextId, onCustomer, drawer, cl
         {stale && <div className="bannr warn"><Icon n="alert" s={16} />Bank data is {Math.round(c.crmSyncMin / 60)} hours old and may have changed. Refresh before you approve.<span className="sp"><button className="btn sm" onClick={() => s.refreshCrm(c.id)}><Icon n="refresh" s={14} />Refresh</button></span></div>}
         {dupOpen && c.dupOf && <div className="bannr info"><Icon n="link" s={16} />Same issue as <button className="link" onClick={() => s.go(`/inbox/${c.dupOf}`)}>{c.dupOf}</button>, which is open. Join it or keep this one separate.<span className="sp"><button className="btn sm p" onClick={() => s.decideDup(c.id, true)}>Join case</button><button className="btn sm" onClick={() => s.decideDup(c.id, false)}>Keep separate</button></span></div>}
         <div className="sum">
-          <header><b><Icon n="spark" s={16} />AI summary</b><span>{agentOf(c)}, {fmtTime(c.opened + 360000)}</span><button className="btn g sm sp" style={{ height: 28 }} onClick={() => s.toast("Summary refreshed")}><Icon n="refresh" s={14} />Refresh</button></header>
-          <div className="cols">
-            <div className="wide"><h3>Issue</h3><p>{c.summary.issue}</p></div>
-            <div><h3>Steps taken</h3><p>{c.summary.steps}</p></div>
-            <div><h3>Suggested next step</h3><p>{c.summary.next}</p></div>
-          </div>
+          <header><b><Icon n={c.manual ? "note" : "spark"} s={16} />{c.manual ? "Case summary" : "AI summary"}</b><span>{c.manual ? "Logged by hand" : agentOf(c)}</span><button className="link sp" onClick={() => setWhy(!why)} aria-expanded={why}>{why ? "Hide steps" : "What the agent did"}</button></header>
+          <p className="issue">{c.summary.issue}</p>
+          <p className="next"><b>Next step</b>{c.summary.next}</p>
+          {why && <p className="steps"><b>Done so far</b>{c.summary.steps}</p>}
         </div>
 
         <div className="ctabs" role="tablist" aria-label="Case sections">
           {TABS.map((t) => (
             <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)}>
-              {t}{t === "Conversation" && <span className="n">{c.messages.length + notes.length}</span>}{t === "Time" && <span className="n">{entries.length}</span>}{t === "Attachments" && c.attachments.length > 0 && <span className="n">{c.attachments.length}</span>}
+              {t}{t === "Conversation" && <span className="n">{c.messages.length + notes.length}</span>}{t === "Files and links" && c.attachments.length > 0 && <span className="n">{c.attachments.length}</span>}
             </button>
           ))}
         </div>
@@ -383,7 +381,7 @@ function CaseView({ s, c, single, onBack, prevId, nextId, onCustomer, drawer, cl
             </div>
           )}
 
-          {tab === "Pipeline" && (
+          {tab === "How the AI handled it" && (
             <div className="pl">
               <div className="plist" role="list">
                 {steps.map((st, i) => {
@@ -411,25 +409,12 @@ function CaseView({ s, c, single, onBack, prevId, nextId, onCustomer, drawer, cl
             </div>
           )}
 
-          {tab === "Resolution" && (c.resolution ? (
-            <div style={{ maxWidth: 520, paddingTop: 12 }}>
-              <dl className="kv" style={{ gridTemplateColumns: "130px 1fr" }}>
-                <dt>Resolved</dt><dd>{fmtTime(c.resolution.at)}</dd><dt>Resolution note</dt><dd>{c.resolution.note}</dd>
-                <dt>Root cause</dt><dd>{c.resolution.root}</dd><dt>Customer told</dt><dd>{c.resolution.notified ? "Yes" : "No"}</dd>
-              </dl>
-              <div className="acts" style={{ marginTop: 16 }}><button className="btn" onClick={() => s.reopen(c.id)}><Icon n="refresh" s={16} />Reopen case</button></div>
-            </div>
-          ) : (
-            <div style={{ maxWidth: 520, paddingTop: 12 }}>
-              <div className="field"><label htmlFor="rn">Resolution note</label><textarea id="rn" className="textarea" value={rnote} onChange={(e) => setRnote(e.target.value)} placeholder="What was done to solve it" /></div>
-              <div className="field"><label htmlFor="rr">Root cause</label><select id="rr" className="select" value={root} onChange={(e) => setRoot(e.target.value)}>{ROOTS.map((r) => <option key={r}>{r}</option>)}</select></div>
-              <label className="check" style={{ marginBottom: 16 }}><input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} />Tell the customer on {CHANNEL_LABEL[c.channel]}</label>
-              <button className="btn p" disabled={!rnote.trim()} onClick={() => { s.resolve(c.id, rnote.trim(), root, notify); setRnote(""); }}><Icon n="check" s={16} />Resolve case</button>
-            </div>
-          ))}
-
-          {tab === "Time" && (
-            <div style={{ paddingTop: 12, maxWidth: 640 }}>
+          {c.resolution && tab === "Conversation" && (
+            <div className="resbox"><Icon n="check" s={16} /><div className="grow"><b>Resolved {fmtTime(c.resolution.at)}</b><span>{c.resolution.note} Root cause: {c.resolution.root}. {c.resolution.notified ? "Customer told." : "Customer not told."}</span></div><button className="btn sm" onClick={() => s.reopen(c.id)}>Reopen</button></div>
+          )}
+          {tab === "Activity and time" && (
+            <div style={{ paddingTop: 12, maxWidth: 680 }}>
+              <div className="timerline"><button className="btn sm" onClick={() => s.setTimer(c.id, !timer.running)}><Icon n={timer.running ? "pause" : "play"} s={14} />{timer.running ? "Pause timer" : "Start timer"}</button><span className="mono">{clock}</span><span className="muted small">The timer runs while the owner has the case open.</span></div>
               <div className="kpis three" style={{ marginBottom: 16 }}>
                 <div className="kpi"><div className="l">Logged</div><div className="v">{logged}<small> min</small></div></div>
                 <div className="kpi"><div className="l">Running timer</div><div className="v">{Math.floor(timer.seconds / 60)}<small> min</small></div><div className="d">{timer.running ? "Counting" : "Paused"}</div></div>
@@ -447,7 +432,7 @@ function CaseView({ s, c, single, onBack, prevId, nextId, onCustomer, drawer, cl
             </div>
           )}
 
-          {tab === "Attachments" && (
+          {tab === "Files and links" && (
             <div style={{ paddingTop: 8 }}>
               {c.attachments.length === 0 ? <Empty title="No attachments">Files from email and chat appear here.</Empty> : c.attachments.map((a) => (
                 <div key={a.name} className="line-item"><Icon n="clip" s={16} /><div className="grow"><b style={{ fontWeight: 500 }}>{a.name}</b><div className="muted" style={{ fontSize: 12 }}>{a.size}, read by the {agentOf(c).toLowerCase()}</div></div><button className="btn sm" onClick={() => s.toast("Download is not part of the prototype")}>Download</button></div>
@@ -455,21 +440,14 @@ function CaseView({ s, c, single, onBack, prevId, nextId, onCustomer, drawer, cl
             </div>
           )}
 
-          {tab === "Activity" && (
-            <ul className="tl" style={{ paddingTop: 14 }}>
+          {tab === "Activity and time" && (
+            <ul className="tl" style={{ paddingTop: 18, maxWidth: 680 }}>
               {activity.map((a, i) => <li key={i}><Icon n="clock" s={16} /><div>{a.text}<small>{fmtTime(a.at)}, {agoLong(a.at)}</small></div></li>)}
             </ul>
           )}
 
-          {tab === "Approvals" && (
-            <div style={{ paddingTop: 12, display: "flex", flexDirection: "column", gap: 12 }}>
-              {c.draft ? <div className="quote"><b>Draft reply waiting.</b> {agentOf(c)} is {Math.round(c.draft.confidence * 100)}% confident. <button className="link" onClick={() => focusComposer("reply")}>Review it in the composer</button></div> : <div className="muted">No draft is waiting on this case.</div>}
-              {s.extensions.filter((x) => x.caseId === c.id).map((x) => <div key={x.id} className="quote"><b>Extension requested by {staffName(x.by)}.</b> Deadline moves from {fmtTime(x.oldDue)} to {fmtTime(x.newDue)}. {x.reason}</div>)}
-            </div>
-          )}
-
-          {tab === "Linked" && (
-            <div style={{ paddingTop: 8 }}>
+          {tab === "Files and links" && (
+            <div style={{ paddingTop: 16 }}><h3 className="subh">Related cases</h3>
               {[...(c.dupOf ? [caseById(c.dupOf)] : []), ...s.cases.filter((x) => x.customerId === c.customerId && x.id !== c.id && x.id !== c.dupOf)].map((x) => (
                 <div key={x.id} className="line-item"><Chan c={x.channel} s={18} /><div className="grow"><button className="rowlink" onClick={() => s.go(`/inbox/${x.id}`)}>{x.subject}</button><div className="muted" style={{ fontSize: 12 }}>{x.id}{x.id === c.dupOf ? ", same issue" : ""}</div></div><StatusPill status={x.status} /></div>
               ))}
@@ -526,6 +504,18 @@ function CaseView({ s, c, single, onBack, prevId, nextId, onCustomer, drawer, cl
         <div className="compose" style={{ padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
           <Icon n="check" s={16} /><span className="grow">This case is resolved. Reopen it to reply.</span><button className="btn sm" onClick={() => s.reopen(c.id)}>Reopen</button>
         </div>
+      )}
+
+      {resolving && (
+        <Sheet title="Resolve the case" sub={`${c.id} · ${c.subject}`} onClose={() => setResolving(false)}
+          footer={<><span className="sp" /><button className="btn" onClick={() => setResolving(false)}>Cancel</button><button className="btn p" disabled={!rnote.trim()} onClick={() => { s.resolve(c.id, rnote.trim(), root, notify); setRnote(""); setResolving(false); }}><Icon n="check" s={16} />Resolve case</button></>}>
+          <div className="form">
+            <div className="field"><label htmlFor="rn">What was done</label><textarea id="rn" className="textarea" rows={4} value={rnote} onChange={(e) => setRnote(e.target.value)} placeholder="For example: Transfer traced and credited back on 23 Nov" /></div>
+            <div className="field"><label htmlFor="rr">Root cause</label><select id="rr" className="select" value={root} onChange={(e) => setRoot(e.target.value)}>{ROOTS.map((r) => <option key={r}>{r}</option>)}</select></div>
+            <label className="check"><input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} />Tell the customer on {CHANNEL_LABEL[c.channel]} from the approved template</label>
+            <p className="hint">The case closes when the customer confirms, or after the quiet period the bank sets. A new reply reopens it.</p>
+          </div>
+        </Sheet>
       )}
 
       {drawer && !wide && (

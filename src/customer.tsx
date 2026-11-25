@@ -29,7 +29,7 @@ export function Customers({ s, selected, from }: { s: Store; selected: string | 
       </div>
       <div className="card tbl-wrap">
         <table className="tbl">
-          <thead><tr><th>Customer</th><th>Customer ID</th><th>Segment</th><th>Branch</th><th>KYC</th><th className="num">Open cases</th><th>Prefers</th></tr></thead>
+          <thead><tr><th>Customer</th><th>Customer ID</th><th>Segment</th><th>Branch</th><th>Bank record</th><th className="num">Open cases</th><th>Prefers</th></tr></thead>
           <tbody>
             {rows.map((c) => {
               const open = s.cases.filter((x) => x.customerId === c.id && isOpen(x)).length;
@@ -39,7 +39,7 @@ export function Customers({ s, selected, from }: { s: Store; selected: string | 
                   <td className="mono">{c.cif || "Not matched"}</td>
                   <td>{c.segment}</td>
                   <td>{c.branch}</td>
-                  <td>{c.kyc ? <Pill tone={c.kyc.status === "Verified" ? "pos" : "warn"}>{c.kyc.status}</Pill> : <Pill tone="warn">Not matched</Pill>}</td>
+                  <td>{c.matched ? <Pill tone="pos">Matched</Pill> : <Pill tone="warn">Not matched</Pill>}</td>
                   <td className="num">{open || "None"}</td>
                   <td><span className="item-top"><Chan c={c.preferred} s={18} />{CHANNEL_LABEL[c.preferred]}</span></td>
                 </tr>
@@ -80,7 +80,7 @@ function Profile({ s, id, from }: { s: Store; id: string; from: string | null })
       </button>
       <div className="who"><Avatar name={cu.name} size={56} /><div><h1>{cu.name}</h1><span className="sub">{cu.matched ? `${cu.segment}, customer since ${cu.since}` : "Not a customer on file"}</span></div></div>
       <div className="tags" style={{ marginTop: -4 }}>
-        {cu.kyc && <Pill tone={cu.kyc.status === "Verified" ? "pos" : "warn"} icon="shield">KYC {cu.kyc.status.toLowerCase()}</Pill>}
+        {cu.matched && <Pill tone="pos" icon="check">In the bank's records</Pill>}
         {cu.verifiedNow && <Pill tone="pos">Verified in the latest contact</Pill>}
         {!cu.matched && <Pill tone="warn">Not matched</Pill>}
         {s.linked[cu.id] && <Pill tone="pri">Linked to {customer(s.linked[cu.id]).name}</Pill>}
@@ -330,7 +330,7 @@ function DetailsView({ s, cu }: { s: Store; cu: Customer }) {
         <button className="btn sm" onClick={() => s.toast("Opens the bank's core banking system in the real product")}><Icon n="external" s={14} />Open in core banking</button>
       </div>
       {group("Identity", [["Customer ID", cu.cif], ["Name", cu.name], ["Mobile", cu.mobile], ["Email", cu.email], ["City and branch", `${cu.city}, ${cu.branch}`], ["Age band", cu.ageBand], ["Language", cu.language], ["Preferred channel", CHANNEL_LABEL[cu.preferred]]])}
-      {cu.kyc && group("KYC and verification", [["KYC status", cu.kyc.status], ["KYC last updated", cu.kyc.updated], ["ID type on file", cu.kyc.idType], ["Verified in latest contact", cu.verifiedNow ? `Yes, ${cu.verifiedNow.how}, ${fmtTime(cu.verifiedNow.when)}` : "No"]])}
+      {cu.kyc && group("Identity", [["ID type on file", cu.kyc.idType], ["ID last updated", cu.kyc.updated], ["Identity checked in the latest contact", cu.verifiedNow ? `Yes, ${cu.verifiedNow.how}, ${fmtTime(cu.verifiedNow.when)}` : "No"]])}
       {group("Relationship", [["Segment", cu.segment], ["Home branch", cu.branch], ["Servicing unit", cu.unit || "Customer care"], ["Customer since", String(cu.since)], ["Linked people", cu.linked.length ? cu.linked.map((l) => `${l.name} (${l.relation})`).join(", ") : "None"]])}
       <div className="card" style={{ marginTop: 14 }}>
         <header><h2>Products</h2></header>

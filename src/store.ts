@@ -1,6 +1,10 @@
-import type { CaseT, Extension, Note, Status, TimeEntry } from "./data";
+import type { CaseT, Channel, Extension, Note, Priority, Status, TimeEntry } from "./data";
 
 export interface CallState { caseId: string; phase: "dialing" | "live" | "wrap"; seconds: number; }
+export interface NewCaseInput {
+  customerId?: string; newName?: string; newContact: string; channel: Channel; source: string; category: string; unit: string;
+  priority: Priority; fraud: boolean; hours: number; subject: string; detail: string; ack: boolean;
+}
 export interface Store {
   cases: CaseT[]; notes: Note[]; entries: TimeEntry[]; extensions: Extension[]; query: string;
   activity: Record<string, { at: number; text: string }[]>;
@@ -19,5 +23,7 @@ export interface Store {
   startCall: (caseId: string) => void; advanceCall: (phase: CallState["phase"], seconds?: number) => void; logCustomer: (customerId: string, text: string) => void; finishCall: (outcome: "Reached" | "No answer" | "Call back later" | "Wrong number", note: string) => void; cancelCall: () => void;
   linkContact: (fromId: string, toId: string) => void; mergeProfile: (keepId: string, dupId: string) => void;
   decide: (id: string, ok: boolean) => void; setTenant: (t: "default" | "landbank") => void;
+  createCase: (x: NewCaseInput) => string; openNewCase: () => void;
+  connected: Record<string, boolean>; connect: (id: string) => void;
 }
 export const isOpen = (c: CaseT) => c.status !== "Resolved";

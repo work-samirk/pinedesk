@@ -66,18 +66,18 @@ export const CUSTOMERS: Customer[] = [
     alerts: [], consent: { email: true, sms: true, call: true, social: false }, matched: true, tone: "Frustrated", complaints12m: 0, escalatedBefore: false, avgResolveH: 22,
     verifiedNow: { how: "One-time code to registered mobile", when: t("2026-11-23T10:00") } },
   { id: "c4", cif: "00704417", name: "Ramon Bautista", mobile: "+63 927 ••• 5530", email: "r.bautista@mail.example", city: "Manila", branch: "Manila", ageBand: "25 to 34", language: "English", preferred: "chat",
-    handles: {}, kyc: { status: "Pending", updated: "08 Nov 2026", idType: "Passport" }, segment: "Retail", since: 2021, unit: "Remittance", linked: [],
-    products: [{ kind: "Savings", label: "Savings account", mask: "••3318", status: "Active" }, { kind: "Remittance", label: "Inbound remittance", status: "Active", detail: "Partner list updated 22 Nov" }],
+    handles: {}, kyc: { status: "Pending", updated: "08 Nov 2026", idType: "Passport" }, segment: "Retail", since: 2021, unit: "Digital Banking", linked: [],
+    products: [{ kind: "Savings", label: "Savings account", mask: "••3318", status: "Active" }, { kind: "Transfers", label: "InstaPay transfers", status: "Active", detail: "1 transfer pending since 22 Nov" }],
     alerts: [], consent: { email: true, sms: true, call: false, social: false }, matched: true, tone: "Worried", complaints12m: 0, escalatedBefore: false, avgResolveH: 40 },
   { id: "c5", cif: "00093351", name: "Teresita Navarro", mobile: "+63 915 ••• 2260", email: "t.navarro@mail.example", city: "San Fernando", branch: "San Fernando", ageBand: "65 and over", language: "Filipino", preferred: "email",
     handles: {}, kyc: { status: "Expired", updated: "11 Feb 2022", idType: "Senior citizen ID" }, segment: "Retail", since: 2003, unit: "Deposits", linked: [],
     products: [{ kind: "Time deposit", label: "Time deposit", mask: "••7741", status: "Active", detail: "Matures 12 Mar 2027" }, { kind: "Savings", label: "Savings account", mask: "••0507", status: "Dormant", detail: "No activity since 2021" }],
-    alerts: ["KYC expired. Ask for an updated ID before any account change."], consent: { email: true, sms: false, call: true, social: false }, matched: true, tone: "Calm", complaints12m: 0, escalatedBefore: false, avgResolveH: 60 },
+    alerts: ["The ID on file has expired. Ask for an updated ID before any account change."], consent: { email: true, sms: false, call: true, social: false }, matched: true, tone: "Calm", complaints12m: 0, escalatedBefore: false, avgResolveH: 60 },
   { id: "c6", cif: "00880736", name: "Antonio Garcia", mobile: "+63 936 ••• 9014", email: "a.garcia@mail.example", city: "Quezon City", branch: "Quezon City", ageBand: "25 to 34", language: "English", preferred: "chat",
     handles: {}, kyc: { status: "Verified", updated: "30 Jan 2026", idType: "National ID" }, segment: "Digital", since: 2022, unit: "Digital Banking", linked: [],
-    products: [{ kind: "Savings", label: "Savings account", mask: "••8842", status: "Active" }, { kind: "Mobile app", label: "Mobile banking", status: "Locked", detail: "Login locked after version 4.2" }],
+    products: [{ kind: "Savings", label: "Savings account", mask: "••8842", status: "Active" }, { kind: "Mobile app", label: "Mobile banking", status: "Locked", detail: "Locked after 3 expired one-time codes" }],
     alerts: [], consent: { email: true, sms: true, call: false, social: false }, matched: true, tone: "Calm", complaints12m: 0, escalatedBefore: false, avgResolveH: 18,
-    verifiedNow: { how: "Username and one-time code", when: t("2026-11-23T09:13") } },
+    verifiedNow: { how: "Registered email and date of birth", when: t("2026-11-23T09:13") } },
   { id: "c7", cif: "00347829", name: "Cristina Lim", mobile: "+63 922 ••• 3375", email: "c.lim@mail.example", city: "Makati", branch: "Makati", ageBand: "45 to 54", language: "English", preferred: "email",
     handles: {}, kyc: { status: "Verified", updated: "05 Dec 2025", idType: "Passport" }, segment: "Business", since: 2016, unit: "Deposits", linked: [{ name: "Lim Trading Corp", relation: "Business owner" }],
     products: [{ kind: "Current", label: "Business account", mask: "••5532", status: "Active" }, { kind: "Time deposit", label: "6-month time deposit", mask: "••9013", status: "Active", detail: "Matures 15 Feb 2027" }],
@@ -97,6 +97,19 @@ export const CUSTOMERS: Customer[] = [
     products: [{ kind: "Savings", label: "Savings account", mask: "••9931", status: "Inactive" }], alerts: [], consent: { email: false, sms: true, call: true, social: false },
     matched: true, tone: "Calm", complaints12m: 0, escalatedBefore: false, avgResolveH: 0, dupOf: "c2" },
 ];
+CUSTOMERS.push(
+  { id: "c12", cif: "", name: "Jenny Castillo", mobile: "", email: "", city: "", branch: "Not a customer on file", ageBand: "", language: "Taglish", preferred: "facebook",
+    handles: { facebook: "jenny.castillo.ph" }, kyc: null, segment: "Public post", since: 0, unit: "", linked: [], products: [], alerts: [], consent: { email: false, sms: false, call: false, social: true },
+    matched: false, tone: "Frustrated", complaints12m: 0, escalatedBefore: false, avgResolveH: 0 },
+  { id: "c13", cif: "00561203", name: "Ricardo Manalo", mobile: "+63 919 ••• 4417", email: "r.manalo@mail.example", city: "Batangas City", branch: "Batangas", ageBand: "45 to 54", language: "Filipino, English", preferred: "messenger",
+    handles: { facebook: "ricardo.manalo.bts" }, kyc: { status: "Verified", updated: "07 Jul 2025", idType: "National ID" }, segment: "Retail", since: 2012, unit: "Fraud", linked: [],
+    products: [{ kind: "Savings", label: "Savings account", mask: "••3006", status: "Active" }], alerts: ["Reported a phishing message. No code or password was shared."], consent: { email: true, sms: true, call: true, social: true },
+    matched: true, tone: "Worried", complaints12m: 0, escalatedBefore: false, avgResolveH: 0, verifiedNow: { how: "Matched on Facebook profile and registered mobile", when: t("2026-11-23T10:08") } },
+  { id: "c14", cif: "00930418", name: "Grace Villareal", mobile: "+63 926 ••• 8150", email: "g.villareal@mail.example", city: "Iloilo City", branch: "Iloilo", ageBand: "18 to 24", language: "English", preferred: "email",
+    handles: {}, kyc: { status: "Pending", updated: "04 Nov 2026", idType: "National ID" }, segment: "Digital", since: 2026, unit: "Digital Banking", linked: [],
+    products: [{ kind: "Savings", label: "Digital savings account", status: "Pending", detail: "Application sent 4 Nov" }], alerts: [], consent: { email: true, sms: true, call: false, social: false },
+    matched: true, tone: "Frustrated", complaints12m: 0, escalatedBefore: false, avgResolveH: 0 },
+);
 export const customer = (id: string) => CUSTOMERS.find((c) => c.id === id)!;
 export const firstName = (n: string) => n.split(" ")[0];
 
@@ -114,7 +127,7 @@ export interface Attachment { name: string; size: string; }
 export interface CaseT {
   id: string; subject: string; customerId: string; channel: Channel; category: string; unit: string;
   priority: Priority; status: Status; assignee: string | null; opened: number; due: number; unread: boolean;
-  stage: number; aiWorking?: boolean; handledByAI?: boolean; repeat?: boolean; fraud?: boolean; callbackAt?: string;
+  stage: number; aiWorking?: boolean; handledByAI?: boolean; manual?: boolean; repeat?: boolean; fraud?: boolean; callbackAt?: string;
   tone: Tone; language: string; crmSyncMin: number; attachments: Attachment[]; dupOf?: string; verified?: string;
   summary: { issue: string; steps: string; next: string }; messages: Message[]; draft?: Draft; checks: string[];
   resolution?: { note: string; root: string; notified: boolean; at: number };
@@ -156,18 +169,18 @@ export const CASES: CaseT[] = [
     draft: { agent: "Chat agent", confidence: 0.92, article: "Card retained by ATM, same-day cash and replacement (v5)", text: "Hi Elena, yes. Please visit the Angeles branch with your ID. A teller can release up to ₱20,000 over the counter, and we will have a replacement card ready for pickup in 3 working days or sent to you. I have opened case LB-2611-0421 so every colleague sees this." },
   },
   {
-    id: "LB-2611-0420", subject: "Mobile app login locked after update", customerId: "c6", channel: "chat", category: "Digital banking", unit: "Digital Banking",
+    id: "LB-2611-0420", subject: "One-time code expires before it arrives after a phone change", customerId: "c6", channel: "chat", category: "OTP, login and device", unit: "Digital Banking",
     priority: "normal", status: "Open", assignee: "ana", opened: t("2026-11-23T09:12"), due: t("2026-11-24T17:00"), unread: true, stage: 5, aiWorking: true,
-    tone: "Calm", language: "English", crmSyncMin: 3, attachments: [], verified: "Username and one-time code",
-    summary: { issue: "Login locked after app version 4.2. The reset link failed twice. The account is active.",
-      steps: "Verified identity, matched the known version 4.2 issue and prepared an unlock request.",
-      next: "Unlock the login and send a fresh reset link." },
-    checks: ["Identity verified", "Known issue: version 4.2 reset link", "Account active"],
+    tone: "Frustrated", language: "Taglish", crmSyncMin: 3, attachments: [], verified: "Registered email and date of birth",
+    summary: { issue: "Antonio moved to a new phone. Each one-time code expires before it arrives, and the app locked him out after three tries.",
+      steps: "Checked identity with the registered email and date of birth, matched the known device re-registration steps and prepared an unlock request.",
+      next: "Unlock the login and send the device re-registration steps from the approved article." },
+    checks: ["Identity checked without asking for the code", "Known issue: codes to an old number after a phone change", "Account active"],
     messages: [
-      m("customer", "Antonio Garcia", "chat", "2026-11-23T09:12", "I updated the app this morning and now it says my account is locked. The reset link does not work."),
-      m("agent", "Chat agent", "chat", "2026-11-23T09:14", "Sorry about that, Antonio. This is a known issue with version 4.2. I am passing you to a colleague to unlock your login.", { delivery: "Read" }),
+      m("customer", "Antonio Garcia", "chat", "2026-11-23T09:12", "Nagpalit ako ng phone. Every OTP I get is already expired pag dumating, and now the app says my account is locked."),
+      m("agent", "Chat agent", "chat", "2026-11-23T09:14", "Sorry about that, Antonio. Please do not share any code with anyone, including us. I am passing you to a colleague who can unlock your login and help you register the new phone.", { delivery: "Read" }),
     ],
-    draft: { agent: "Chat agent", confidence: 0.94, article: "Version 4.2 login lock, unlock steps (v2)", text: "Hi Antonio, your login has been unlocked. Please close the app, reopen it and sign in with your username. If the reset link is still needed, use the one we have just sent to your registered email." },
+    draft: { agent: "Chat agent", confidence: 0.91, article: "New phone and expired one-time codes, re-registration steps (v3)", text: "Hi Antonio, your login is unlocked. Open the app on your new phone, choose Forgot password and follow the steps to register this device. The new code will come to your registered mobile number. Never share it with anyone, including Land Bank staff." },
   },
   {
     id: "LB-2611-0418", subject: "Loan restructuring after typhoon damage", customerId: "c2", channel: "email", category: "Loans", unit: "Loans",
@@ -230,16 +243,17 @@ export const CASES: CaseT[] = [
     ],
   },
   {
-    id: "LB-2611-0415", subject: "Remittance from Dubai not received", customerId: "c4", channel: "chat", category: "Remittance", unit: "Remittance",
+    id: "LB-2611-0415", subject: "InstaPay transfer to GCash debited but not received", customerId: "c4", channel: "email", category: "Transfers and payments", unit: "Digital Banking",
     priority: "high", status: "Waiting on customer", assignee: "carlo", opened: t("2026-11-22T20:30"), due: t("2026-11-24T20:30"), unread: false, stage: 6,
-    tone: "Worried", language: "English", crmSyncMin: 5, attachments: [], verified: "One-time code to registered mobile",
-    summary: { issue: "Ramon expects a transfer sent from Dubai on 20 Nov. It has not arrived.",
-      steps: "Asked for the reference number and a receipt copy. No match yet on the partner list.",
-      next: "Wait for the reference, then trace the transfer with the partner." },
-    checks: ["Reference number requested", "No match found on partner list"],
+    tone: "Worried", language: "English", crmSyncMin: 5, attachments: [], verified: "Registered mobile and date of birth",
+    summary: { issue: "Ramon sent ₱5,000 by InstaPay to a GCash wallet on 22 Nov. The amount left his account but has not reached the wallet.",
+      steps: "Confirmed the debit on the account. Asked for the transaction reference number and a screenshot of the confirmation.",
+      next: "Trace the transfer with the reference, then credit it back or confirm delivery." },
+    checks: ["Debit of ₱5,000 confirmed on 22 Nov", "Reference number requested", "Not yet traced with the receiving wallet"],
     messages: [
-      m("customer", "Ramon Bautista", "chat", "2026-11-22T20:30", "My brother sent money from Dubai on 20 Nov. It has not arrived in my account."),
-      m("staff", "Carlo Mendoza", "chat", "2026-11-23T08:05", "Good morning Ramon. Please send the reference number and a photo of the receipt so we can trace the transfer.", { delivery: "Delivered" }),
+      m("customer", "Ramon Bautista", "email", "2026-11-22T20:30", "Good evening. I sent ₱5,000 to my sister's GCash wallet through InstaPay on the mobile app this afternoon. The amount was deducted from my savings account but she has not received it. Please help."),
+      m("agent", "Email agent", "email", "2026-11-22T20:32", "Thank you, Mr Bautista. We received your email and opened case LB-2611-0415. We will update you within 2 banking days.", { delivery: "Delivered" }),
+      m("staff", "Carlo Mendoza", "email", "2026-11-23T08:05", "Good morning Mr Bautista. Please reply with the transaction reference number and a screenshot of the confirmation so we can trace the transfer.", { delivery: "Delivered" }),
     ],
   },
   {
@@ -247,9 +261,9 @@ export const CASES: CaseT[] = [
     priority: "normal", status: "Open", assignee: "ana", opened: t("2026-11-19T10:00"), due: t("2026-11-26T17:00"), unread: false, stage: 6,
     tone: "Calm", language: "Filipino", crmSyncMin: 7, attachments: [], verified: "Matched on email address",
     summary: { issue: "Teresita wants to close a savings account dormant since 2021. Balance ₱1,820.",
-      steps: "Confirmed the balance and sent the closing form. Her KYC has expired.",
+      steps: "Confirmed the balance and sent the closing form. The ID on file has expired.",
       next: "Receive the signed form and a valid ID, then close the account." },
-    checks: ["Balance confirmed", "Signed request form sent", "KYC expired, new ID required"],
+    checks: ["Balance confirmed", "Signed request form sent", "ID on file expired, new ID required"],
     messages: [
       m("customer", "Teresita Navarro", "email", "2026-11-19T10:00", "I would like to close my old savings account. I have not used it for years."),
       m("staff", "Liza Ramos", "email", "2026-11-20T14:20", "Please sign the attached request form and send it with a copy of your ID.", { delivery: "Read" }),
@@ -290,6 +304,47 @@ export const CASES: CaseT[] = [
     checks: ["Matched to business account ••7020", "Classified as business enquiry"],
     messages: [
       m("customer", "Patricia Gomez", "linkedin", "2026-11-23T09:44", "Hello, we want to set up a payroll account for about 40 staff. What do you need from us?"),
+    ],
+  },
+  {
+    id: "LB-2611-0427", subject: "App down since this morning, cannot pay bills", customerId: "c12", channel: "facebook", category: "App availability", unit: "Digital Banking",
+    priority: "high", status: "New", assignee: null, opened: t("2026-11-23T10:24"), due: t("2026-11-24T10:24"), unread: true, stage: 5,
+    tone: "Frustrated", language: "Taglish", crmSyncMin: 0, attachments: [],
+    summary: { issue: "Public comment: the mobile app shows an error since the morning and bills are due today. One of 41 similar comments in 24 hours.",
+      steps: "Classified as a grievance with no personal data. Linked to the open spike alert on app access. Found the bank's service advisory for today.",
+      next: "Post the approved known-issue reply and invite a private message if a payment failed." },
+    checks: ["Public comment, no personal data", "Part of the app access spike", "Service advisory found, approved for replies"],
+    messages: [
+      m("customer", "Jenny Castillo", "facebook", "2026-11-23T10:24", "Hindi ako maka-login since this morning, error lang lagi. Due today pa naman bills ko. Ano na LANDBANK?"),
+    ],
+    draft: { agent: "Social agent", confidence: 0.89, article: "Known issue reply: app access, 23 Nov advisory (v1)", text: "Hi Jenny, we are sorry for the trouble. Some customers cannot sign in to the mobile app this morning and our team is fixing it. You can still use iAccess on the web. If a payment did not go through, please send us a private message and we will check it for you." },
+  },
+  {
+    id: "LB-2611-0428", subject: "Text message asks for my OTP to stop an account block", customerId: "c13", channel: "messenger", category: "Fraud and scams", unit: "Fraud",
+    priority: "urgent", status: "Open", assignee: "ana", opened: t("2026-11-23T10:05"), due: t("2026-11-23T14:05"), unread: true, stage: 5, fraud: true,
+    tone: "Worried", language: "Filipino, English", crmSyncMin: 1, attachments: [{ name: "sms-screenshot.jpg", size: "640 KB" }], verified: "Matched on Facebook profile and registered mobile",
+    summary: { issue: "Ricardo received a text saying his account will be blocked unless he opens a link and enters his one-time code. He did not open it.",
+      steps: "Flagged as a phishing report, read the screenshot, confirmed no code was shared and sent the fraud team the sender number and link.",
+      next: "Thank Ricardo, confirm the bank never asks for codes, and share the official reporting steps." },
+    checks: ["Phishing pattern: asks for a one-time code", "Customer confirms no code was shared", "Sender and link sent to the fraud team"],
+    messages: [
+      m("customer", "Ricardo Manalo", "messenger", "2026-11-23T10:05", "May text ako na ma-block daw account ko kung hindi ko i-enter ang OTP sa link. Is this really from LANDBANK? I did not click it."),
+      m("agent", "Social agent", "messenger", "2026-11-23T10:07", "Thank you for checking with us, Ricardo. Please do not open the link or share any code. Can you send a screenshot of the message so our fraud team can act on it?", { delivery: "Read" }),
+      m("customer", "Ricardo Manalo", "messenger", "2026-11-23T10:11", "Here it is.", { delivery: "Read" }),
+    ],
+    draft: { agent: "Social agent", confidence: 0.93, article: "Phishing reports, reply and reporting steps (v4)", text: "Thank you, Ricardo. This message is not from Land Bank. We never ask for your one-time code, PIN or password by text, email or social media. Our fraud team has the sender details. Please delete the message, and if you ever share a code by mistake, call our hotline right away." },
+  },
+  {
+    id: "LB-2611-0429", subject: "Online account opening still pending after three weeks", customerId: "c14", channel: "email", category: "Account opening", unit: "Digital Banking",
+    priority: "normal", status: "Open", assignee: "ana", opened: t("2026-11-22T18:40"), due: t("2026-11-25T18:40"), unread: false, stage: 6,
+    tone: "Frustrated", language: "English", crmSyncMin: 9, attachments: [{ name: "application-confirmation.png", size: "210 KB" }], verified: "Matched on email and application number",
+    summary: { issue: "Grace applied for a digital savings account on 4 Nov. The status still shows pending and the branch asked her to come back twice.",
+      steps: "Read the confirmation screenshot, matched the application and found it waiting for an ID review.",
+      next: "Ask Digital Banking to finish the ID review, then tell Grace the outcome and the date." },
+    checks: ["Application found, sent 4 Nov", "Waiting for an ID review", "Branch visits noted twice"],
+    messages: [
+      m("customer", "Grace Villareal", "email", "2026-11-22T18:40", "I applied for an account online on 4 November and it still says pending. I already went to the branch twice. Please tell me what is missing."),
+      m("agent", "Email agent", "email", "2026-11-22T18:42", "Thank you, Grace. We received your email and opened case LB-2611-0429. We will update you within 3 banking days.", { delivery: "Delivered" }),
     ],
   },
   {
@@ -528,6 +583,10 @@ export const EXCEPTIONS = [
   { id: "LB-2611-0377", reason: "Core banking timeout", unit: "Deposits", at: t("2026-11-21T14:48") },
   { id: "LB-2611-0369", reason: "Needs unit sign-off", unit: "Cards", at: t("2026-11-21T09:30") },
   { id: "LB-2611-0362", reason: "Customer not matched", unit: "Customer care", at: t("2026-11-20T15:20") },
+];
+export const EXC_REASONS = [
+  { label: "Customer not matched", value: 14 }, { label: "Low confidence", value: 11 }, { label: "Needs unit sign-off", value: 9 },
+  { label: "Attachment unreadable", value: 6 }, { label: "Core banking timeout", value: 4 },
 ];
 export const STEP_LATENCY: Record<AgentKind, { name: string; avg: number; p95: number }[]> = {
   email: [{ name: "Fetch and read", avg: 3.9, p95: 7.1 }, { name: "Extract details", avg: 4.1, p95: 9.4 }, { name: "Classify", avg: 2.8, p95: 6.0 }, { name: "Find customer", avg: 1.3, p95: 2.3 }, { name: "Open case check", avg: 0.9, p95: 1.6 }, { name: "Route", avg: 0.4, p95: 0.9 }, { name: "Draft reply", avg: 6.9, p95: 14.2 }],

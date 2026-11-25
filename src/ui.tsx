@@ -60,6 +60,12 @@ const PATHS: Record<string, ReactNode> = {
   external: <><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><path d="M15 3h6v6" /><path d="M10 14 21 3" /></>,
   mic: <><rect x="9" y="2" width="6" height="12" rx="3" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><path d="M12 19v3" /></>,
   volume: <><path d="M11 5 6 9H2v6h4l5 4z" /><path d="M15.54 8.46a5 5 0 0 1 0 7.07" /></>,
+  home: <><path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2h-4v-7H9v7H5a2 2 0 0 1-2-2z" /></>,
+  pulse: <><path d="M3 12h4l3-8 4 16 3-8h4" /></>,
+  plug: <><path d="M9 2v6M15 2v6" /><path d="M6 8h12v4a6 6 0 0 1-12 0z" /><path d="M12 18v4" /></>,
+  zap: <path d="M13 2 4 14h7l-1 8 9-12h-7z" />,
+  msg: <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />,
+  globe: <><circle cx="12" cy="12" r="10" /><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></>,
   layers: <><path d="m12 2 10 5-10 5L2 7z" /><path d="m2 17 10 5 10-5" /><path d="m2 12 10 5 10-5" /></>,
 };
 export function Icon({ n, s = 18, className = "" }: { n: keyof typeof PATHS | string; s?: number; className?: string }) {
@@ -155,32 +161,6 @@ export function MenuItem({ children, onClick, active, icon, danger }: { children
 }
 
 // ---------------------------------------------------------------- charts
-export function LineChart({ values, labels, unit }: { values: number[]; labels: string[]; unit: string }) {
-  const phone = useMedia("(max-width: 640px)");
-  const W = phone ? 340 : 640, H = phone ? 190 : 210, L = 34, R = 8, T = 10, B = 24;
-  const max = Math.ceil(Math.max(...values) / 20) * 20;
-  const x = (i: number) => L + (i * (W - L - R)) / (values.length - 1);
-  const y = (v: number) => T + (1 - v / max) * (H - T - B);
-  const pts = values.map((v, i) => `${x(i)},${y(v)}`).join(" ");
-  const ticks = [0, max / 2, max];
-  return (
-    <div className="chart">
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Cases opened per day, ${unit}`}>
-        {ticks.map((tk) => (
-          <g key={tk}>
-            <line x1={L} x2={W - R} y1={y(tk)} y2={y(tk)} stroke="#e3e7ef" strokeDasharray="3 4" />
-            <text x={L - 8} y={y(tk) + 4} textAnchor="end" fontSize="11" fill="#5d6983">{tk}</text>
-          </g>
-        ))}
-        <polyline points={pts} fill="none" stroke="#2b5ff2" strokeWidth="2" strokeLinejoin="round" style={{ stroke: "var(--primary)" }} />
-        <circle cx={x(values.length - 1)} cy={y(values[values.length - 1])} r="3.5" style={{ fill: "var(--primary)" }} />
-        {(phone ? [0, 14, 29] : [0, 7, 14, 21, 29]).map((i) => (
-          <text key={i} x={x(i)} y={H - 6} textAnchor={i === 0 ? "start" : i === 29 ? "end" : "middle"} fontSize="11" fill="#5d6983">{labels[i]}</text>
-        ))}
-      </svg>
-    </div>
-  );
-}
 export function BarList({ rows, max, target, fmt }: { rows: { label: string; value: number; risk?: boolean }[]; max: number; target?: number; fmt: (v: number) => string }) {
   return (
     <div className="barlist">

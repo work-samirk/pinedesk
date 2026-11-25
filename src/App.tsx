@@ -1,20 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CASES, EXTENSIONS, ME, NOTES, TIME_ENTRIES, customer, type CaseT, type Extension, type Note, type Status, type TimeEntry } from "./data";
+import { CASES, CUSTOMERS, EXTENSIONS, ME, NOTES, TIME_ENTRIES, customer, type CaseT, type Extension, type Note, type Status, type TimeEntry } from "./data";
 import { Customers } from "./customer";
 import { Inbox } from "./inbox";
 import { Agents, Approvals, Reports, Settings, Team } from "./manage";
+import { animateRail, usePageEnter } from "./motion";
+import { NewCase } from "./newcase";
+import { Overview } from "./overview";
+import { LOGOS } from "./sheet";
+import { Social } from "./social";
 import { isOpen, type CallState, type Store } from "./store";
 import { Avatar, Icon, Toast } from "./ui";
 
 const NAV = [
-  { group: "Work", items: [["inbox", "Inbox", "inbox"], ["customers", "Customers", "users"], ["approvals", "Approvals", "approve"]] },
+  { group: "Work", items: [["overview", "Overview", "home"], ["inbox", "Cases", "inbox"], ["social", "Social sentiment", "pulse"], ["customers", "Customers", "users"], ["approvals", "Approvals", "approve"]] },
   { group: "Manage", items: [["team", "Team and deadlines", "clock"], ["reports", "Reports", "chart"], ["agents", "AI agents", "bot"], ["settings", "Settings", "sliders"]] },
 ] as const;
-const TITLES: Record<string, string> = { inbox: "Inbox", customers: "Customers", approvals: "Approvals", team: "Team and deadlines", reports: "Reports", agents: "AI agents", settings: "Settings" };
+const TITLES: Record<string, string> = { overview: "Overview", inbox: "Cases", social: "Social sentiment", customers: "Customers", approvals: "Approvals", team: "Team and deadlines", reports: "Reports", agents: "AI agents", settings: "Settings" };
 
 function parse(): { screen: string; id: string | null; extra: string | null } {
   const [, screen, id, extra] = window.location.hash.replace(/^#/, "").split("/");
-  return { screen: TITLES[screen] ? screen : "inbox", id: id ?? null, extra: extra ?? null };
+  return { screen: TITLES[screen] ? screen : "overview", id: id ?? null, extra: extra ?? null };
 }
 
 export default function App() {
@@ -30,7 +35,13 @@ export default function App() {
   const [merged, setMerged] = useState<Record<string, string>>({});
   const [dupDecided, setDupDecided] = useState<Store["dupDecided"]>({});
   const [call, setCall] = useState<CallState | null>(null);
-  const [tenant, setTenantState] = useState<"default" | "landbank">("default");
+  const [tenant, setTenantState] = useState<"default" | "landbank">("landbank");
+  const [newCase, setNewCase] = useState(false);
+  const [connected, setConnected] = useState<Record<string, boolean>>({});
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem("pd-rail") === "1");
+  const railRef = useRef<HTMLElement | null>(null);
+  const mainRef = useRef<HTMLDivElement | null>(null);
+  const seq = useRef(429);
   const [query, setQuery] = useState("");
   const [note, setNote] = useState<string | null>(null);
   const [more, setMore] = useState(false);
@@ -122,7 +133,38 @@ export default function App() {
       toast(ok ? "Extension approved" : "Extension rejected");
     },
     setTenant: (t) => setTenantState(t),
+    openNewCase: () => setNewCase(true),
+    connected, connect: (id) => setConnected((c) => ({ ...c, [id]: true })),
+    createCase: (x) => {
+      const id = `LB-2611-0${++seq.current}`;
+      let cid = x.customerId;
+      if (!cid) {
+        cid = `c${100 + seq.current}`;
+        const email = x.newContact.includes("@") ? x.newContact : "";
+        CUSTOMERS.push({ id: cid, cif: "", name: x.newName ?? "New contact", mobile: email ? "" : x.newContact, email, city: "", branch: "Not a customer on file", ageBand: "", language: "English", preferred: x.channel,
+          handles: {}, kyc: null, segment: "New contact", since: 0, unit: "", linked: [], products: [], alerts: [], consent: { email: !!email, sms: !email && !!x.newContact, call: !!x.newContact, social: false },
+          matched: false, tone: "Calm", complaints12m: 0, escalatedBefore: false, avgResolveH: 0 });
+      }
+      const at = stamp();
+      const c: CaseT = {
+        id, subject: x.subject, customerId: cid, channel: x.channel, category: x.category, unit: x.unit, priority: x.priority, status: "New", assignee: ME.id,
+        opened: at, due: at + x.hours * 3600000, unread: false, stage: 4, fraud: x.fraud, manual: true, tone: "Calm", language: "English", crmSyncMin: 0, attachments: [],
+        summary: { issue: x.detail, steps: `Logged by hand by ${ME.name} from ${x.source.toLowerCase()}. Routed to ${x.unit} by the category rule.`, next: x.fraud ? "Fraud lane: confirm the customer is safe, then work the case." : "Check the details and reply to the customer." },
+        checks: [`Source: ${x.source}`, `Routed to ${x.unit}`, ...(x.ack ? ["Reference sent to the customer"] : [])],
+        messages: [{ id: `m${nextId()}`, from: "staff", who: ME.name, channel: x.channel, at, text: `${x.source}: ${x.detail}` },
+          ...(x.ack ? [{ id: `m${nextId()}`, from: "staff" as const, who: "PineDesk", channel: x.channel, at: at + 1000, text: `Acknowledgement sent with reference ${id}.`, delivery: "Sent" as const }] : [])],
+      };
+      setCases((cs) => [c, ...cs]);
+      log(id, `Case created by hand from ${x.source.toLowerCase()}`);
+      log(`cust:${cid}`, `${ME.name} opened case ${id}`);
+      toast(`Case ${id} created and routed to ${x.unit}`);
+      return id;
+    },
   };
+
+  const toggleRail = () => { const n = !collapsed; setCollapsed(n); localStorage.setItem("pd-rail", n ? "1" : "0"); animateRail(railRef.current, n); };
+  useEffect(() => { if (railRef.current) railRef.current.style.width = collapsed ? "76px" : "236px"; }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  usePageEnter(mainRef, `${route.screen}/${route.screen === "inbox" ? "" : route.id ?? ""}`);
 
   const open = cases.filter(isOpen);
   const counts: Record<string, number> = {
@@ -138,65 +180,72 @@ export default function App() {
       case "reports": return <Reports />;
       case "agents": return <Agents s={store} />;
       case "settings": return <Settings s={store} />;
-      default: return <Inbox s={store} selected={route.id} />;
+      case "inbox": return <Inbox s={store} selected={route.id} />;
+      case "social": return <Social s={store} />;
+      default: return <Overview s={store} />;
     }
   })();
 
   return (
-    <div className="app">
-      <aside className="side" aria-label="Sidebar">
-        <div className="brand"><div className="mark" aria-hidden="true">P</div><div><b>PineDesk</b><span>Land Bank</span></div></div>
+    <div className={`app ${collapsed ? "railed" : ""}`}>
+      <a className="skip" href="#main-content" onClick={(e) => { e.preventDefault(); document.getElementById("main-content")?.focus(); }}>Skip to content</a>
+      <aside className="side" aria-label="Sidebar" ref={railRef}>
+        <div className="brand">
+          <img className="lb" src={LOGOS.lbLight} alt="LANDBANK" />
+          <div className="pd" data-label><b>PineDesk</b><span>by <img src={LOGOS.plLight} alt="Pine Labs" /></span></div>
+        </div>
         <nav aria-label="Main">
           {NAV.map((g) => (
             <div key={g.group}>
-              <div className="grp">{g.group}</div>
+              <div className="grp" data-label>{g.group}</div>
               <div className="nav">
                 {g.items.map(([k, label, ic]) => (
-                  <button key={k} aria-current={route.screen === k ? "page" : undefined} onClick={() => go(`/${k}`)}>
-                    <Icon n={ic} s={18} />{label}{counts[k] ? <span className="n">{counts[k]}</span> : null}
+                  <button key={k} aria-current={route.screen === k ? "page" : undefined} onClick={() => go(`/${k}`)} title={collapsed ? label : undefined} aria-label={collapsed ? label : undefined}>
+                    <Icon n={ic} s={18} /><span className="nl" data-label>{label}</span>{counts[k] ? <span className="n">{counts[k]}</span> : null}
                   </button>
                 ))}
               </div>
             </div>
           ))}
         </nav>
-        <div className="me"><Avatar name={ME.name} size={32} /><div><b>{ME.name}</b><span className="st"><i className="dot" />Available</span></div></div>
+        <button className="collapse" onClick={toggleRail} aria-label={collapsed ? "Expand the sidebar" : "Collapse the sidebar"} aria-expanded={!collapsed}>
+          <Icon n={collapsed ? "right" : "left"} s={16} /><span data-label>{collapsed ? "" : "Collapse"}</span>
+        </button>
+        <div className="me"><Avatar name={ME.name} size={32} /><div data-label><b>{ME.name}</b><span className="st"><i className="dot" />Available</span></div></div>
       </aside>
 
-      <header className="mtop"><div className="mark" aria-hidden="true">P</div><div className="mtitle">{TITLES[route.screen]}</div><button className="icb" aria-label="Notifications"><Icon n="bell" s={18} /></button></header>
+      <header className="mtop"><img className="lb" src={LOGOS.lbLight} alt="LANDBANK" /><div className="mtitle">{TITLES[route.screen]}</div><button className="icb" aria-label="New case" onClick={() => setNewCase(true)}><Icon n="plus" s={18} /></button></header>
 
       <div className="main">
         <header className="top">
           <div className="ttl">{TITLES[route.screen]}</div>
           <label className="search"><Icon n="search" s={16} />
-            <input type="search" aria-label="Search cases and customers" placeholder="Search cases, customers and IDs" value={query}
+            <input type="search" aria-label="Search cases and customers" placeholder="Search cases, customers and reference numbers" value={query}
               onChange={(e) => { setQuery(e.target.value); if (route.screen !== "inbox") go("/inbox"); }} />
-            <kbd>Ctrl K</kbd></label>
+          </label>
           <div className="right">
-            <span className="proto">Prototype, sample data</span>
-            <span className="avail"><i className="dot" />Available</span>
-            <button className="btn p" onClick={() => toast("Creating a case is not part of the prototype")}><Icon n="plus" s={16} />New case</button>
+            <span className="proto" title="All names, numbers and messages are sample data">Sample data</span>
             <button className="icb" aria-label="Notifications"><Icon n="bell" s={18} /><i className="pip" /></button>
-            <button className="icb" aria-label="Help"><Icon n="help" s={18} /></button>
+            <button className="btn p" onClick={() => setNewCase(true)}><Icon n="plus" s={16} />New case</button>
           </div>
         </header>
-        {body}
+        <div className="body" ref={mainRef} id="main-content" tabIndex={-1}>{body}</div>
       </div>
 
       {compact && (
         <>
           <nav className="mtabs" aria-label="Main">
-            {([["inbox", "Inbox", "inbox"], ["approvals", "Approvals", "approve"], ["team", "Team", "clock"], ["customers", "Customers", "users"]] as const).map(([k, l, ic]) => (
+            {([["overview", "Home", "home"], ["inbox", "Cases", "inbox"], ["social", "Social", "pulse"], ["approvals", "Approvals", "approve"]] as const).map(([k, l, ic]) => (
               <button key={k} aria-current={route.screen === k ? "page" : undefined} onClick={() => go(`/${k}`)}>
                 <Icon n={ic} s={20} /><span>{l}</span>{counts[k] ? <span className="badge">{counts[k]}</span> : null}
               </button>
             ))}
-            <button aria-current={["reports", "agents", "settings"].includes(route.screen) ? "page" : undefined} onClick={() => setMore(true)}><Icon n="more" s={20} /><span>More</span></button>
+            <button aria-current={["customers", "team", "reports", "agents", "settings"].includes(route.screen) ? "page" : undefined} onClick={() => setMore(true)}><Icon n="more" s={20} /><span>More</span></button>
           </nav>
           {more && (
-            <div className="sheet-more" onClick={() => setMore(false)}>
-              <div onClick={(e) => e.stopPropagation()} role="dialog" aria-label="More">
-                {([["reports", "Reports", "chart"], ["agents", "AI agents", "bot"], ["settings", "Settings", "sliders"]] as const).map(([k, l, ic]) => (
+            <div className="sheet-more" onClick={() => setMore(false)} onKeyDown={(e) => { if (e.key === "Escape") setMore(false); }}>
+              <div onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="More">
+                {([["customers", "Customers", "users"], ["team", "Team and deadlines", "clock"], ["reports", "Reports", "chart"], ["agents", "AI agents", "bot"], ["settings", "Settings", "sliders"]] as const).map(([k, l, ic]) => (
                   <button key={k} onClick={() => go(`/${k}`)}><Icon n={ic} s={20} />{l}</button>
                 ))}
               </div>
@@ -204,6 +253,7 @@ export default function App() {
           )}
         </>
       )}
+      {newCase && <NewCase s={store} onClose={() => setNewCase(false)} />}
       <CallPanel s={store} />
       <Toast text={note} />
     </div>
